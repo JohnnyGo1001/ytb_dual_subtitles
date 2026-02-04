@@ -1,0 +1,580 @@
+"""Download manager for handling concurrent video downloads.
+
+Subtask 2.1: 创建 DownloadManager 类，实现任务队列
+Subtask 2.2: 实现并发控制（最多3个并行任务）
+Subtask 2.3: 实现下载状态管理和状态转换
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from datetime import datetime
+from typing import Any
+
+from ytb_dual_subtitles.exceptions.download_errors import (
+    VideoNotFoundError,
+)
+from ytb_dual_subtitles.models.video import DownloadTaskStatus
+from ytb_dual_subtitles.services.youtube_service import YouTubeService
+from ytb_dual_subtitles.database.models import DatabaseManager
+from ytb_dual_subtitles.database.task_dao import TaskDAO
+from ytb_dual_subtitles.core.settings import get_settings
+
+
+class DownloadTask:
+    """Represents a single download task."""
+
+    def __init__(self, url: str) -> None:
+        """Initialize download task.
+
+        Args:
+            url: YouTube video URL to download
+        """
+        self.task_id = str(uuid.uuid4())
+        self.url = url
+        self.status = DownloadTaskStatus.PENDING
+        self.progress = 0
+        self.error_message: str | None = None
+        self.status_message: str = ""
+        self.retry_count = 0
+        self.created_at = datetime.now()
+        self.started_at: datetime | None = None
+        self.completed_at: datetime | None = None
+
+        # Detailed progress information for HTTP API
+        self.downloaded_bytes = 0
+        self.total_bytes = 0
+        self.download_speed = 0.0
+        self.eta_seconds = 0
+        self.last_updated = datetime.now()
+
+    def update_progress(self, progress: int, message: str = "", **kwargs) -> None:
+        """Update task progress.
+
+        Args:
+            progress: Progress percentage (0-100)
+            message: Status message
+            **kwargs: Additional progress data (downloaded, total, speed, eta)
+        """
+        self.progress = progress
+        self.status_message = message
+        self.last_updated = datetime.now()
+
+        # Store detailed progress data for HTTP API
+        self.downloaded_bytes = kwargs.get("downloaded", 0)
+        self.total_bytes = kwargs.get("total", 0)
+        self.download_speed = kwargs.get("speed", 0.0)
+        self.eta_seconds = kwargs.get("eta", 0)
+
+    def set_error(self, error_message: str) -> None:
+        """Set task error status.
+
+        Args:
+            error_message: Error description
+        """
+        self.status = DownloadTaskStatus.ERROR
+        self.error_message = error_message
+
+
+class DownloadManager:
+    """Manages concurrent video download tasks."""
+
+    def __init__(
+        self,
+        youtube_service: YouTubeService,
+        storage_service: Any,  # Will be properly typed when storage service is implemented
+        max_concurrent: int = 3,
+        max_retries: int = 3
+    ) -> None:
+        """Initialize download manager.
+
+        Args:
+            youtube_service: YouTube service for video operations
+            storage_service: Storage service for file operations
+            max_concurrent: Maximum number of concurrent downloads
+        """
+        self._youtube_service = youtube_service
+        self._storage_service = storage_service
+        self.max_concurrent = max_concurrent
+        self.max_retries = max_retries
+
+        # Database setup
+        settings = get_settings()
+        self._db_manager = DatabaseManager(settings.database_path)
+        self._task_dao = TaskDAO(self._db_manager)
+
+        # Concurrency control
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._running_tasks: dict[str, asyncio.Task[None]] = {}
+
+        # Load active tasks from database on startup
+        self._restore_active_tasks()
+
+    def _restore_active_tasks(self) -> None:
+        """Restore active tasks from database on startup."""
+        # Mark any hanging 'downloading' tasks as pending to retry
+        pending_tasks = self._task_dao.get_tasks_by_status('downloading')
+        for task_data in pending_tasks:
+            self._task_dao.update_task(task_data['task_id'], {
+                'status': 'pending',
+                'status_message': 'Restored after service restart'
+            })
+
+    def _task_data_to_download_task(self, task_data: dict[str, Any]) -> DownloadTask:
+        """Convert database task data to DownloadTask object.
+
+        Args:
+            task_data: Task data from database
+
+        Returns:
+            DownloadTask object
+        """
+        task = DownloadTask(task_data['url'])
+        task.task_id = task_data['task_id']
+        task.status = DownloadTaskStatus(task_data['status'])
+        task.progress = task_data['progress']
+        task.error_message = task_data['error_message']
+        task.status_message = task_data['status_message'] or ''
+        task.retry_count = task_data['retry_count']
+
+        # Parse timestamps
+        if task_data['created_at']:
+            task.created_at = datetime.fromisoformat(task_data['created_at'])
+        if task_data['started_at']:
+            task.started_at = datetime.fromisoformat(task_data['started_at'])
+        if task_data['completed_at']:
+            task.completed_at = datetime.fromisoformat(task_data['completed_at'])
+        if task_data['last_updated']:
+            task.last_updated = datetime.fromisoformat(task_data['last_updated'])
+
+        # File info
+        task.downloaded_bytes = task_data['downloaded_bytes']
+        task.total_bytes = task_data['total_bytes']
+        task.download_speed = task_data['download_speed']
+        task.eta_seconds = task_data['eta_seconds']
+
+        return task
+
+    def _download_task_to_data(self, task: DownloadTask) -> dict[str, Any]:
+        """Convert DownloadTask object to database data.
+
+        Args:
+            task: DownloadTask object
+
+        Returns:
+            Dictionary for database storage
+        """
+        return {
+            'task_id': task.task_id,
+            'url': task.url,
+            'title': getattr(task, 'title', None),
+            'status': task.status.value,
+            'progress': task.progress,
+            'error_message': task.error_message,
+            'status_message': task.status_message,
+            'retry_count': task.retry_count,
+            'downloaded_bytes': task.downloaded_bytes,
+            'total_bytes': task.total_bytes,
+            'download_speed': task.download_speed,
+            'eta_seconds': task.eta_seconds,
+            'created_at': task.created_at.isoformat() if task.created_at else None,
+            'started_at': task.started_at.isoformat() if task.started_at else None,
+            'completed_at': task.completed_at.isoformat() if task.completed_at else None,
+            'last_updated': task.last_updated.isoformat() if task.last_updated else None,
+        }
+
+    async def create_task(self, url: str) -> DownloadTask:
+        """Create a new download task with duplicate check.
+
+        Args:
+            url: YouTube video URL
+
+        Returns:
+            Created download task or existing active task for same URL
+
+        Raises:
+            ValueError: If URL is invalid
+        """
+        # Check if there's already an active task for this URL in database
+        normalized_url = url.strip()
+        existing_task_data = self._task_dao.get_active_task_by_url(normalized_url)
+        if existing_task_data:
+            return self._task_data_to_download_task(existing_task_data)
+
+        # Get video info to extract title for deduplication
+        try:
+            video_id = self._youtube_service.extract_video_id(url)
+            video_info = await self._youtube_service.get_video_info(video_id)
+            video_title = video_info.get("title", "")
+        except Exception as e:
+            # Create task but mark it as errored if we can't get video info
+            task = DownloadTask(url=url)
+            task.set_error(f"Failed to get video info: {e}")
+            # Save to database
+            task_data = self._download_task_to_data(task)
+            self._task_dao.create_task(task_data)
+            return task
+
+        # Check if video with same title already exists (deduplication by title)
+        if video_title:
+            existing_task_by_title = self._task_dao.get_completed_task_by_title(video_title)
+            if existing_task_by_title:
+                # Video with same title already downloaded
+                existing_task = self._task_data_to_download_task(existing_task_by_title)
+                return existing_task
+
+        # Generate filename from URL
+        try:
+            filename = self._youtube_service.generate_filename_from_url(url)
+            file_path = self._storage_service.generate_file_path_from_url(filename)
+        except ValueError as e:
+            # Create task but mark it as errored if URL is invalid
+            task = DownloadTask(url=url)
+            task.set_error(f"Invalid URL: {e}")
+            # Save to database
+            task_data = self._download_task_to_data(task)
+            self._task_dao.create_task(task_data)
+            return task
+
+        # Check if file already exists
+        existing_info = self._storage_service.get_existing_file_info(file_path)
+        if existing_info:
+            # File exists, create a completed task with existing file info
+            task = DownloadTask(url=url)
+            task.status = DownloadTaskStatus.COMPLETED
+            task.progress = 100
+            task.status_message = "File already exists"
+            task.completed_at = task.created_at
+            task.total_bytes = existing_info.get("size", 0)
+            task.downloaded_bytes = existing_info.get("size", 0)
+            # Store video title
+            setattr(task, 'title', video_title)
+            # Save to database
+            task_data = self._download_task_to_data(task)
+            self._task_dao.create_task(task_data)
+            return task
+
+        # File doesn't exist, create normal pending task
+        task = DownloadTask(url=url)
+        # Store video title in task for later use
+        setattr(task, 'title', video_title)
+        # Save to database
+        task_data = self._download_task_to_data(task)
+        self._task_dao.create_task(task_data)
+        return task
+
+    async def start_task(self, task_id: str) -> None:
+        """Start a download task.
+
+        Args:
+            task_id: ID of the task to start
+
+        Raises:
+            ValueError: If task is not found
+        """
+        # Find task in database
+        task_data = self._task_dao.get_task(task_id)
+        if not task_data:
+            raise ValueError("Task not found")
+
+        if task_data['status'] not in ['pending']:
+            raise ValueError(f"Task {task_id} is not in pending status")
+
+        # Update status to downloading
+        self._task_dao.update_task(task_id, {
+            'status': 'downloading',
+            'started_at': datetime.now().isoformat()
+        })
+
+        # Convert to DownloadTask object for processing
+        task = self._task_data_to_download_task(task_data)
+        task.status = DownloadTaskStatus.DOWNLOADING
+        task.started_at = datetime.now()
+
+        # Start download in background
+        download_coro = self._download_task(task)
+        self._running_tasks[task_id] = asyncio.create_task(download_coro)
+
+    async def _download_task(self, task: DownloadTask) -> None:
+        """Execute the download for a task with retry mechanism.
+
+        Args:
+            task: Download task to execute
+        """
+        try:
+            async with self._semaphore:
+                while True:
+                    try:
+                        # Attempt download with new filename scheme
+                        filename = self._youtube_service.generate_filename_from_url(task.url)
+                        file_path = self._storage_service.generate_file_path_from_url(filename)
+                        await self._youtube_service.download_video(task.url, task.task_id, str(file_path))
+                        await self._complete_task(task, success=True)
+                        return  # Success, exit retry loop
+
+                    except asyncio.CancelledError:
+                        # Task was cancelled, don't mark as error
+                        return
+
+                    except Exception as e:
+                        # Check if this is a non-retryable error
+                        if self._is_non_retryable_error(e):
+                            task.set_error(str(e))
+                            await self._complete_task(task, success=False)
+                            return
+
+                        # If we've exceeded max retries, mark as failed
+                        if task.retry_count >= self.max_retries:
+                            task.set_error(str(e))
+                            await self._complete_task(task, success=False)
+                            return
+
+                        # Increment retry count and update database
+                        task.retry_count += 1
+                        self._task_dao.update_task(task.task_id, {
+                            'retry_count': task.retry_count,
+                            'status_message': f'Retrying... (attempt {task.retry_count + 1})'
+                        })
+
+                        # Wait before retry (exponential backoff)
+                        wait_time = 2 ** (task.retry_count - 1)  # 1, 2, 4, 8 seconds
+                        await asyncio.sleep(wait_time)
+
+        except asyncio.CancelledError:
+            # Task was cancelled, this is expected
+            pass
+
+        finally:
+            # Clean up running task reference
+            if task.task_id in self._running_tasks:
+                del self._running_tasks[task.task_id]
+
+    def _is_non_retryable_error(self, error: Exception) -> bool:
+        """Check if an error should not trigger retries.
+
+        Args:
+            error: Exception that occurred
+
+        Returns:
+            True if error should not be retried
+        """
+        # Don't retry on video not found or similar permanent errors
+        non_retryable_types = (VideoNotFoundError,)
+
+        return isinstance(error, non_retryable_types)
+
+    async def _complete_task(self, task: DownloadTask, success: bool) -> None:
+        """Complete a download task.
+
+        Args:
+            task: DownloadTask object
+            success: Whether the task completed successfully
+        """
+        # Update task status
+        if success and task.status != DownloadTaskStatus.ERROR:
+            task.status = DownloadTaskStatus.COMPLETED
+            task.progress = 100
+
+            # If download was successful, get video info and create video record
+            await self._create_video_record(task)
+        elif task.status != DownloadTaskStatus.ERROR:
+            task.status = DownloadTaskStatus.FAILED
+
+        task.completed_at = datetime.now()
+
+        # Update database
+        updates = {
+            'status': task.status.value,
+            'progress': task.progress,
+            'completed_at': task.completed_at.isoformat(),
+            'error_message': task.error_message
+        }
+
+        self._task_dao.update_task(task.task_id, updates)
+
+        # Clean up running task reference
+        if task.task_id in self._running_tasks:
+            del self._running_tasks[task.task_id]
+
+    async def _create_video_record(self, task: DownloadTask) -> None:
+        """Create a video record in the videos table after successful download.
+
+        Args:
+            task: Completed download task
+        """
+        try:
+            # Extract video ID from URL
+            video_id = self._youtube_service.extract_video_id(task.url)
+
+            # Get video information
+            video_info = await self._youtube_service.get_video_info(video_id)
+
+            # Get downloaded file path
+            filename = self._youtube_service.generate_filename_from_url(task.url)
+            file_path = self._storage_service.generate_file_path_from_url(filename)
+
+            # Import SQLAlchemy components
+            from ytb_dual_subtitles.core.database import get_db_session
+            from ytb_dual_subtitles.models.video import Video, VideoStatus
+
+            # Create video record in the videos table
+            async with get_db_session() as session:
+                # Check if video already exists by youtube_id or title
+                from sqlalchemy import select, or_
+                video_title = video_info.get("title", "未知标题")
+
+                existing_video = await session.execute(
+                    select(Video).where(
+                        or_(
+                            Video.youtube_id == video_id,
+                            Video.title == video_title
+                        )
+                    )
+                )
+                existing = existing_video.scalar_one_or_none()
+                if existing:
+                    print(f"Video '{video_title}' already exists in database (ID: {existing.youtube_id}), skipping creation")
+                    # Update download task with title
+                    self._task_dao.update_task(task.task_id, {
+                        'title': video_title
+                    })
+                    return
+
+                # Create new video record
+                video = Video(
+                    youtube_id=video_id,
+                    title=video_title,
+                    description=video_info.get("description", ""),
+                    duration=video_info.get("duration", 0),
+                    file_path=str(file_path),
+                    status=VideoStatus.COMPLETED,
+                )
+
+                session.add(video)
+                await session.commit()
+                print(f"Created video record for: {video_title}")
+
+                # Update download task with title
+                self._task_dao.update_task(task.task_id, {
+                    'title': video_title
+                })
+
+        except Exception as e:
+            print(f"Failed to create video record: {e}")
+            # Don't re-raise the exception to avoid failing the download task
+
+    def get_task_status(self, task_id: str) -> dict[str, Any] | None:
+        """Get status of a download task.
+
+        Args:
+            task_id: ID of the task
+
+        Returns:
+            Task status information or None if not found
+        """
+        # Get task from database
+        task_data = self._task_dao.get_task(task_id)
+        if not task_data:
+            return None
+
+        return {
+            'task_id': task_data['task_id'],
+            'url': task_data['url'],
+            'status': task_data['status'],
+            'progress': task_data['progress'],
+            'status_message': task_data['status_message'] or '',
+            'error_message': task_data['error_message'],
+            'created_at': task_data['created_at'],
+            'started_at': task_data['started_at'],
+            'completed_at': task_data['completed_at'],
+            'last_updated': task_data['last_updated'],
+            'downloaded_bytes': task_data['downloaded_bytes'],
+            'total_bytes': task_data['total_bytes'],
+            'download_speed': task_data['download_speed'],
+            'eta_seconds': task_data['eta_seconds'],
+        }
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        """List all tasks.
+
+        Returns:
+            List of task status information
+        """
+        # Get all tasks from database
+        all_task_data = self._task_dao.get_all_tasks()
+
+
+        tasks = []
+        for task_data in all_task_data:
+            # Convert to the format expected by the API
+            task_status = {
+                'task_id': task_data['task_id'],
+                'url': task_data['url'],
+                'status': task_data['status'],
+                'progress': task_data['progress'],
+                'status_message': task_data['status_message'] or '',
+                'error_message': task_data['error_message'],
+                'created_at': task_data['created_at'],
+                'started_at': task_data['started_at'],
+                'completed_at': task_data['completed_at'],
+                'last_updated': task_data['last_updated'],
+                'downloaded_bytes': task_data['downloaded_bytes'],
+                'total_bytes': task_data['total_bytes'],
+                'download_speed': task_data['download_speed'],
+                'eta_seconds': task_data['eta_seconds'],
+            }
+            tasks.append(task_status)
+
+        return tasks
+
+
+    async def cancel_task(self, task_id: str) -> bool:
+        """Cancel a download task.
+
+        Args:
+            task_id: ID of the task to cancel
+
+        Returns:
+            True if task was found and cancelled, False otherwise
+        """
+        # Get task from database
+        task_data = self._task_dao.get_task(task_id)
+        if not task_data:
+            return False
+
+        # Can only cancel pending or downloading tasks
+        if task_data['status'] not in ['pending', 'downloading']:
+            return False
+
+        # If it's currently running, cancel the asyncio task
+        if task_id in self._running_tasks:
+            running_task = self._running_tasks[task_id]
+            running_task.cancel()
+            try:
+                await running_task
+            except asyncio.CancelledError:
+                pass  # Expected cancellation
+            finally:
+                # Clean up running task reference
+                if task_id in self._running_tasks:
+                    del self._running_tasks[task_id]
+
+        # Update task status in database
+        updates = {
+            'status': 'cancelled',
+            'completed_at': datetime.now().isoformat(),
+            'status_message': 'Cancelled by user'
+        }
+
+        success = self._task_dao.update_task(task_id, updates)
+
+        # Clean up temporary files if needed
+        if hasattr(self._storage_service, 'cleanup_temp_files'):
+            cleanup_func = self._storage_service.cleanup_temp_files
+            if asyncio.iscoroutinefunction(cleanup_func):
+                await cleanup_func(task_id)
+            else:
+                cleanup_func(task_id)
+
+        return success

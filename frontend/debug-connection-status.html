@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Connection Status</title>
+</head>
+<body>
+    <h2>Connection Status Debug Page</h2>
+    <p>This is a simple test page to debug the ConnectionStatus component.</p>
+    <p>Check the browser console for connection status logs.</p>
+
+    <div id="status-info">
+        <p>Open browser DevTools console to see:</p>
+        <ul>
+            <li>Connection state changes</li>
+            <li>Polling requests every 2 seconds</li>
+            <li>Component re-renders</li>
+        </ul>
+    </div>
+
+    <script>
+        // Simple debugging script
+        console.log('Debug page loaded. Watch for connection status updates...');
+
+        // Monitor fetch requests to see polling activity
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            console.log('🌐 HTTP Request:', args[0]);
+            return originalFetch.apply(this, args);
+        };
+    </script>
+</body>
+</html>

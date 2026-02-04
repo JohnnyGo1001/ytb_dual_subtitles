@@ -1,0 +1,114 @@
+/* Loading容器 */
+.container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+}
+
+.centered {
+  justify-content: center;
+  padding: 2rem;
+}
+
+/* 覆盖层模式 */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
+.overlayContent {
+  background: var(--bg-primary);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  min-width: 200px;
+  justify-content: center;
+}
+
+/* 加载旋转器 */
+.spinner {
+  border: 2px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+/* 不同尺寸的旋转器 */
+.small {
+  width: 1rem;
+  height: 1rem;
+  border-width: 1.5px;
+}
+
+.medium {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-width: 2px;
+}
+
+.large {
+  width: 2rem;
+  height: 2rem;
+  border-width: 2.5px;
+}
+
+/* 旋转动画 */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 加载文本 */
+.text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.overlay .text {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+/* 主题适配 */
+[data-theme="light"] .overlayContent {
+  background: #ffffff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .overlayContent {
+  background: var(--bg-primary);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .overlayContent {
+    margin: 1rem;
+    padding: 1.5rem;
+    min-width: 150px;
+  }
+
+  .overlay .text {
+    font-size: 0.875rem;
+  }
+}

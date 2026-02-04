@@ -1,0 +1,36 @@
+.connectionStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-small);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-sm);
+  transition: all 0.3s ease;
+}
+
+.connectionStatus:hover {
+  background: var(--bg-tertiary);
+}
+
+.icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .label {
+    display: none;
+  }
+
+  .connectionStatus {
+    padding: var(--spacing-xs);
+  }
+}

@@ -1,0 +1,259 @@
+/* 响应式工具类 */
+
+/* 显示/隐藏工具类 */
+.show-mobile { display: none !important; }
+.show-tablet { display: none !important; }
+.show-desktop { display: block !important; }
+
+.hide-mobile { display: block !important; }
+.hide-tablet { display: block !important; }
+.hide-desktop { display: none !important; }
+
+/* 移动端 */
+@media (max-width: 767px) {
+  .show-mobile { display: block !important; }
+  .hide-mobile { display: none !important; }
+
+  .show-mobile-flex { display: flex !important; }
+  .show-mobile-grid { display: grid !important; }
+  .show-mobile-inline { display: inline !important; }
+  .show-mobile-inline-block { display: inline-block !important; }
+}
+
+/* 平板端 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .show-tablet { display: block !important; }
+  .hide-tablet { display: none !important; }
+
+  .show-tablet-flex { display: flex !important; }
+  .show-tablet-grid { display: grid !important; }
+}
+
+/* 桌面端 */
+@media (min-width: 1024px) {
+  .show-desktop { display: block !important; }
+  .hide-desktop { display: none !important; }
+
+  .show-desktop-flex { display: flex !important; }
+  .show-desktop-grid { display: grid !important; }
+}
+
+/* 间距工具类 - 响应式 */
+.p-responsive {
+  padding: var(--spacing-sm);
+}
+
+.m-responsive {
+  margin: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .p-responsive {
+    padding: var(--spacing-md);
+  }
+
+  .m-responsive {
+    margin: var(--spacing-md);
+  }
+}
+
+@media (min-width: 1024px) {
+  .p-responsive {
+    padding: var(--spacing-lg);
+  }
+
+  .m-responsive {
+    margin: var(--spacing-lg);
+  }
+}
+
+/* 字体大小响应式 */
+.text-responsive {
+  font-size: var(--font-size-sm);
+}
+
+@media (min-width: 768px) {
+  .text-responsive {
+    font-size: var(--font-size-base);
+  }
+}
+
+@media (min-width: 1024px) {
+  .text-responsive {
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* 按钮响应式大小 */
+.btn-responsive {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  min-height: 44px; /* 移动端触控最小尺寸 */
+}
+
+@media (min-width: 768px) {
+  .btn-responsive {
+    padding: var(--spacing-md) var(--spacing-lg);
+    font-size: var(--font-size-base);
+    min-height: 40px;
+  }
+}
+
+/* 容器最大宽度响应式 */
+.container-sm {
+  max-width: 576px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+.container-md {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+.container-lg {
+  max-width: 992px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+.container-xl {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+/* Flexbox 响应式工具 */
+.flex-responsive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .flex-responsive {
+    flex-direction: row;
+    gap: var(--spacing-md);
+  }
+}
+
+/* 网格响应式间距 */
+.gap-responsive {
+  gap: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .gap-responsive {
+    gap: var(--spacing-md);
+  }
+}
+
+@media (min-width: 1024px) {
+  .gap-responsive {
+    gap: var(--spacing-lg);
+  }
+}
+
+/* 图片响应式 */
+.img-responsive {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 视频响应式 */
+.video-responsive {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  height: 0;
+  overflow: hidden;
+}
+
+.video-responsive iframe,
+.video-responsive video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 表单响应式 */
+.form-responsive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+  .form-responsive {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+/* 卡片响应式 */
+.card-responsive {
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius);
+}
+
+@media (min-width: 768px) {
+  .card-responsive {
+    padding: var(--spacing-lg);
+  }
+}
+
+/* 导航响应式 */
+.nav-responsive {
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .nav-responsive {
+    flex-direction: row;
+    gap: var(--spacing-lg);
+  }
+}
+
+/* 文本对齐响应式 */
+.text-center-mobile {
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .text-center-mobile {
+    text-align: left;
+  }
+}
+
+/* 溢出处理 */
+.overflow-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+  .overflow-responsive {
+    overflow-x: visible;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .container {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .shadow {
+    box-shadow: none !important;
+  }
+}

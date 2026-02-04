@@ -1,0 +1,202 @@
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+
+  .card:hover {
+    box-shadow: 0 4px 8px var(--shadow);
+  }
+}
+
+.thumbnail {
+  flex-shrink: 0;
+  width: 120px;
+  height: 68px;
+  background: var(--bg-primary);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.format {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.progressBar {
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #ff8a95);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progressInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.percentage {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.size {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.statusText {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.statusPending {
+  color: #fbbf24; /* amber-400 */
+}
+
+.statusDownloading {
+  color: #3b82f6; /* blue-500 */
+}
+
+.statusCompleted {
+  color: #10b981; /* emerald-500 */
+}
+
+.statusFailed {
+  color: #ef4444; /* red-500 */
+}
+
+.statusCancelled {
+  color: var(--text-secondary);
+}
+
+.errorText {
+  font-size: 0.75rem;
+  color: #ef4444; /* red-500 */
+}
+
+.eta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .card {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .thumbnail {
+    width: 100px;
+    height: 56px;
+  }
+
+  .title {
+    font-size: 0.8rem;
+  }
+
+  .format {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .percentage,
+  .size,
+  .statusText,
+  .errorText,
+  .eta {
+    font-size: 0.7rem;
+  }
+}
+
+/* 主题适配 */
+[data-theme="light"] .card {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .card {
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}

@@ -1,0 +1,156 @@
+[project]
+name = "ytb-dual-subtitles"
+version = "0.1.0"
+description = "YouTube 双语字幕系统 - 支持视频下载和双语字幕播放"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+keywords = ["youtube", "subtitles", "video", "download", "dual-language"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "yt-dlp>=2023.10.13",
+    "jinja2>=3.1.2",
+    "python-multipart>=0.0.6",
+    "aiofiles>=23.2.1",
+    "pydantic>=2.4.0",
+    "httpx>=0.25.0",
+    "aiohttp>=3.8.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "googletrans>=4.0.0",
+    "websockets>=11.0.0",
+    "aiosqlite>=0.19.0",
+    "pydantic-settings>=2.0.0",
+    "typing-extensions>=4.15.0",
+    "starlette>=0.50.0",
+    "watchdog>=6.0.0",
+    "ffmpeg-python>=0.2.0",
+    "pillow>=12.1.0",
+    "youtube-transcript-api>=0.6.0",
+    "greenlet>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+    "pre-commit>=3.5.0",
+    "black>=23.9.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/ytb-dual-subtitles"
+Repository = "https://github.com/yourusername/ytb-dual-subtitles.git"
+Issues = "https://github.com/yourusername/ytb-dual-subtitles/issues"
+
+[project.scripts]
+ytb-subtitles = "ytb_dual_subtitles.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ytb_dual_subtitles"]
+
+# Ruff 配置（遵循代码规范）
+[tool.ruff]
+line-length = 88
+indent-width = 4
+extend-include = ["*.ipynb"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "TID251", # flake8-tidy-imports
+]
+ignore = [
+    "E501",   # 行太长（由格式化工具处理）
+    "B008",   # 函数调用在参数默认值中
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.TypedDict".msg = "Use typing_extensions.TypedDict instead."
+
+# MyPy 配置（遵循代码规范）
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+explicit_package_bases = true
+warn_no_return = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+allow_redefinition = true
+strict = true
+
+[[tool.mypy.overrides]]
+module = [
+    "yt_dlp.*",
+]
+ignore_missing_imports = true
+
+# Pytest 配置
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=src/ytb_dual_subtitles",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+# Coverage 配置
+[tool.coverage.run]
+source = ["src/ytb_dual_subtitles"]
+omit = ["*/tests/*", "*/test_*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.14",
+]

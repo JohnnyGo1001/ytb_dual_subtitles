@@ -1,0 +1,81 @@
+.searchBar {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.searchForm {
+  margin-bottom: var(--spacing-lg);
+}
+
+.searchInput {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+}
+
+.input {
+  flex: 1;
+}
+
+.searchButton {
+  flex-shrink: 0;
+}
+
+.sortControls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.sortLabel {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.sortButton {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  .sortButton:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .sortButton.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .searchBar {
+    padding: var(--spacing-md);
+  }
+
+  .searchInput {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+
+  .sortControls {
+    gap: var(--spacing-sm);
+  }
+
+  .sortButton {
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}

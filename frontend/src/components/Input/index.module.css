@@ -1,0 +1,142 @@
+/* Input容器 */
+.inputContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Label样式 */
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+/* Input包装器 */
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+}
+
+.inputWrapper:hover:not(.disabled) {
+  border-color: var(--accent);
+}
+
+/* Input基础样式 */
+.input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+}
+
+.input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* 尺寸变体 */
+.small .input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.medium .input {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.large .input {
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+}
+
+/* 错误状态 */
+.error .inputWrapper {
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.05);
+}
+
+.error .inputWrapper:focus-within {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.errorMessage {
+  font-size: 0.75rem;
+  color: #dc3545;
+  margin-top: 0.25rem;
+}
+
+/* 禁用状态 */
+.disabled .inputWrapper {
+  background: rgba(var(--text-secondary), 0.1);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.disabled .input {
+  cursor: not-allowed;
+  color: var(--text-secondary);
+}
+
+/* 前缀和后缀 */
+.prefix,
+.suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.prefix {
+  padding-left: 1rem;
+  padding-right: 0.5rem;
+}
+
+.suffix {
+  padding-left: 0.5rem;
+  padding-right: 1rem;
+}
+
+.small .prefix,
+.small .suffix {
+  font-size: 0.75rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.large .prefix,
+.large .suffix {
+  font-size: 1rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+/* 主题适配 */
+[data-theme="light"] .inputWrapper {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .inputWrapper {
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}

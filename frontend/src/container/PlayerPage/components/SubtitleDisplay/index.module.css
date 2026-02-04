@@ -1,0 +1,44 @@
+.subtitleDisplay {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .subtitleDisplay.hidden {
+    display: none;
+  }
+}
+
+.subtitleContainer {
+  text-align: center;
+  max-width: 80%;
+}
+
+.englishSubtitle,
+.chineseSubtitle {
+  display: block;
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.6;
+}
+
+.englishSubtitle {
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.chineseSubtitle {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .englishSubtitle {
+    font-size: var(--font-size-base);
+  }
+
+  .chineseSubtitle {
+    font-size: var(--font-size-sm);
+  }
+}

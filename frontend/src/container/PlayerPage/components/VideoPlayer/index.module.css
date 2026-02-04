@@ -1,0 +1,97 @@
+.videoPlayer {
+  position: relative;
+  width: 100%;
+  background: black;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md);
+  gap: var(--spacing-md);
+}
+
+.playButton,
+.fullscreenButton {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s ease;
+
+  .fullscreenButton:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.progressBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
+
+  .progressBar::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+  }
+}
+
+.timeDisplay {
+  color: white;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.volumeControl {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
+
+  .volumeControl::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .controls {
+    padding: var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+
+  .timeDisplay {
+    display: none;
+  }
+
+  .volumeControl {
+    width: 60px;
+  }
+}
