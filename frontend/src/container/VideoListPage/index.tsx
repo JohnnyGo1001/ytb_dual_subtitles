@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SearchBar, VideoGrid, type SortField, type SortOrder } from './components';
+import { SearchBar, VideoGrid, CategorySidebar, type SortField, type SortOrder } from './components';
 import { useApi } from '@/hooks/useApi';
 import { useToast } from '@/contexts/ToastContext';
 import { apiService } from '@/services/api';
@@ -17,6 +17,7 @@ function VideoListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [selectedCategory, setSelectedCategory] = useState('全部');
 
   // API hooks
   const {
@@ -82,6 +83,26 @@ function VideoListPage() {
     }
   }, [executeDelete, showToast, loadVideos, fetchVideos]);
 
+  const handleCategoryChange = useCallback(async (video: Video, newCategory: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/videos/${video.id}/category?category=${encodeURIComponent(newCategory)}`, {
+        method: 'PATCH',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast(`已将视频移动到"${newCategory}"`, 'success');
+        // Reload videos
+        loadVideos(fetchVideos);
+      } else {
+        showToast(result.error_msg || '修改分类失败', 'error');
+      }
+    } catch (error) {
+      showToast('修改分类失败', 'error');
+    }
+  }, [showToast, loadVideos, fetchVideos]);
+
   const handleExportSubtitle = useCallback(async (video: Video) => {
     if (!video.subtitle_available) {
       showToast('该视频没有可用的字幕', 'warning');
@@ -145,49 +166,65 @@ function VideoListPage() {
   const videos = videosResponse?.videos || [];
   const isLoading = loading || deleting;
 
-  // 调试信息
-  console.log('videosResponse:', videosResponse);
-  console.log('提取的videos数组:', videos);
-  console.log('videos数组长度:', videos.length);
-  console.log('loading状态:', loading);
-  console.log('error状态:', error);
+  // Filter videos by selected category
+  const filteredVideos = useMemo(() => {
+    if (selectedCategory === '全部') {
+      return videos;
+    }
+    return videos.filter(video => (video.category || '未分类') === selectedCategory);
+  }, [videos, selectedCategory]);
+
+  // Handle category change
+  const handleCategorySelect = useCallback((category: string) => {
+    setSelectedCategory(category);
+  }, []);
+
+  // Handle categories change (when category is added/edited/deleted)
+  const handleCategoriesChange = useCallback(() => {
+    loadVideos(fetchVideos);
+  }, [loadVideos, fetchVideos]);
 
   return (
-    <div className={styles.container}>
-      {/* Page Header */}
-      <div className={styles.header}>
-        <h1 className={styles.title}>视频列表</h1>
-        <p className={styles.subtitle}>管理您下载的视频和字幕</p>
-      </div>
+    <div className={styles.layout}>
+      {/* Left Sidebar - Categories */}
+      <CategorySidebar
+        selectedCategory={selectedCategory}
+        onSelectCategory={handleCategorySelect}
+        onCategoriesChange={handleCategoriesChange}
+      />
 
-      {/* Search and Sort Controls */}
-      <div className={styles.controls}>
-        <SearchBar
-          onSearch={handleSearch}
-          onSort={handleSort}
-          searchQuery={searchQuery}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-        />
-      </div>
-
-      {/* Video Grid */}
-      <div className={styles.content}>
-        <VideoGrid
-          videos={videos}
-          loading={isLoading}
-          onPlay={handlePlay}
-          onDelete={handleDelete}
-          onExportSubtitle={handleExportSubtitle}
-        />
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className={styles.errorContainer}>
-          <p className={styles.errorText}>加载视频列表时出现错误，请刷新页面重试。</p>
+      {/* Main Content Area */}
+      <div className={styles.mainContent}>
+        {/* Search Bar */}
+        <div className={styles.searchRow}>
+          <SearchBar
+            onSearch={handleSearch}
+            onSort={handleSort}
+            searchQuery={searchQuery}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+          />
         </div>
-      )}
+
+        {/* Video Grid */}
+        <div className={styles.videoContent}>
+          <VideoGrid
+            videos={filteredVideos}
+            loading={isLoading}
+            onPlay={handlePlay}
+            onDelete={handleDelete}
+            onExportSubtitle={handleExportSubtitle}
+            onCategoryChange={handleCategoryChange}
+          />
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className={styles.errorContainer}>
+            <p className={styles.errorText}>加载视频列表时出现错误，请刷新页面重试。</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

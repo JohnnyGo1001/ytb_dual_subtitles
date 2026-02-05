@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi';
 import { apiService } from '@/services/api';
@@ -44,19 +44,19 @@ function PlayerPage() {
   }, [videoId]);
 
   // Handle video time updates
-  const handleTimeUpdate = (time: number) => {
+  const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
-  };
+  }, []);
 
   // Handle player state changes
-  const handleStateChange = (state: Partial<PlayerState>) => {
+  const handleStateChange = useCallback((state: Partial<PlayerState>) => {
     setPlayerState(prev => ({ ...prev, ...state }));
-  };
+  }, []);
 
   // Handle video errors
-  const handleVideoError = (error: Error) => {
+  const handleVideoError = useCallback((error: Error) => {
     console.error('Video playback error:', error);
-  };
+  }, []);
 
   // Retry loading data
   const handleRetry = () => {

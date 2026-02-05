@@ -1,0 +1,241 @@
+.sidebar {
+  width: 240px;
+  height: calc(100vh - 100px);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 20px;
+}
+
+.header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.categoryList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.categoryWrapper {
+  margin-bottom: 0.25rem;
+}
+
+.categoryItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 0.5rem;
+}
+
+.categoryItem:hover {
+  background: var(--bg-primary);
+}
+
+.categoryItem.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.categoryItem.active .categoryName,
+.categoryItem.active .categoryCount {
+  color: white;
+}
+
+.categoryName {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.categoryActions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.categoryItem:hover .categoryActions {
+  opacity: 1;
+}
+
+.categoryItem.active .categoryActions {
+  opacity: 1;
+}
+
+.categoryCount {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.categoryItem.active .categoryCount {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.editButton,
+.deleteButton {
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+  line-height: 1;
+}
+
+.editButton:hover,
+.deleteButton:hover {
+  transform: scale(1.2);
+}
+
+.editMode {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--bg-primary);
+  border-radius: 8px;
+}
+
+.editInput,
+.addInput {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.editInput:focus,
+.addInput:focus {
+  border-color: #3b82f6;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 0.375rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.saveButton {
+  background: #10b981;
+  color: white;
+}
+
+.saveButton:hover {
+  background: #059669;
+}
+
+.cancelButton {
+  background: #ef4444;
+  color: white;
+}
+
+.cancelButton:hover {
+  background: #dc2626;
+}
+
+.addCategory {
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.addCategoryForm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.addButton {
+  width: 100%;
+  padding: 0.625rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addButton:hover {
+  background: #f9fafb;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* 滚动条样式 */
+.categoryList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.categoryList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.categoryList::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.categoryList::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* 响应式设计 */
+@media (max-width: 968px) {
+  .sidebar {
+    width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    width: 240px;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+}

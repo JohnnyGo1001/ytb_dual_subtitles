@@ -10,6 +10,7 @@ interface VideoGridProps {
   onPlay: (video: Video) => void;
   onDelete: (video: Video) => void;
   onExportSubtitle: (video: Video) => void;
+  onCategoryChange?: (video: Video, newCategory: string) => void;
 }
 
 const VideoGrid: React.FC<VideoGridProps> = ({
@@ -18,6 +19,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   onPlay,
   onDelete,
   onExportSubtitle,
+  onCategoryChange,
 }) => {
   if (loading) {
     return (
@@ -48,6 +50,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
           onPlay={onPlay}
           onDelete={onDelete}
           onExportSubtitle={onExportSubtitle}
+          onCategoryChange={onCategoryChange}
         />
       ))}
     </div>

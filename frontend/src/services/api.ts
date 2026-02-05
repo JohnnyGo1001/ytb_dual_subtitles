@@ -176,6 +176,51 @@ export class ApiService {
 
     return response.blob();
   }
+
+  /**
+   * 获取所有分类
+   */
+  async getCategories(): Promise<ApiResponse<{categories: Array<{id: number, name: string, description?: string, color?: string, icon?: string, video_count: number}>, total: number}>> {
+    return this.request('/categories');
+  }
+
+  /**
+   * 创建新分类
+   */
+  async createCategory(data: {name: string, description?: string, color?: string, icon?: string}): Promise<ApiResponse<any>> {
+    return this.request('/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * 更新分类
+   */
+  async updateCategory(categoryId: number, data: {name?: string, description?: string, color?: string, icon?: string}): Promise<ApiResponse<any>> {
+    return this.request(`/categories/${categoryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * 删除分类
+   */
+  async deleteCategory(categoryId: number): Promise<ApiResponse<any>> {
+    return this.request(`/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * 更新视频分类
+   */
+  async updateVideoCategory(videoId: string, category: string): Promise<ApiResponse<any>> {
+    return this.request(`/videos/${videoId}/category?category=${encodeURIComponent(category)}`, {
+      method: 'PATCH',
+    });
+  }
 }
 
 // 默认导出单例实例

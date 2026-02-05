@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from ytb_dual_subtitles.api.routes import downloads, files
+from ytb_dual_subtitles.api.routes import downloads, files, player, categories
 from ytb_dual_subtitles.core.database import init_database
 from ytb_dual_subtitles.models import ApiResponse, ErrorCodes
 
@@ -39,8 +39,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000", "http://127.0.0.1:3000",  # Default frontend port
-        "http://localhost:3001", "http://127.0.0.1:3001",  # Vite dev server alternate port
+        "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server default port
+        "http://localhost:3000", "http://127.0.0.1:3000",  # Alternative frontend port
+        "http://localhost:3001", "http://127.0.0.1:3001",  # Alternative frontend port
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -102,6 +103,8 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 # Include API routes
 app.include_router(downloads.router, prefix="/api", tags=["downloads"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+app.include_router(player.router, prefix="/api/player", tags=["player"])
+app.include_router(categories.router, prefix="/api", tags=["categories"])
 
 
 @app.get("/", response_model=ApiResponse[dict[str, str]])

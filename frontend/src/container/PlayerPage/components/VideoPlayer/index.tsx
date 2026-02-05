@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { Video, PlayerState } from '@/types/video';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import styles from './index.module.css';
@@ -31,13 +31,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [subtitlesVisible, setSubtitlesVisible] = useState(true);
 
   // Update internal state and notify parent
-  const updateState = (newState: Partial<PlayerState>) => {
+  const updateState = useCallback((newState: Partial<PlayerState>) => {
     setPlayerState(prev => {
       const updated = { ...prev, ...newState };
-      onStateChange?.(updated);
+      // Call onStateChange outside of render, but we don't include it in deps
+      // to avoid infinite loops since parent might recreate the callback
       return updated;
     });
-  };
+  }, []);
+
+  // Notify parent of state changes after component updates
+  useEffect(() => {
+    if (onStateChange) {
+      onStateChange(playerState);
+    }
+    // Intentionally not including onStateChange in deps to prevent infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState.currentTime, playerState.duration, playerState.isPlaying, playerState.volume, playerState.playbackRate, playerState.isFullscreen]);
 
   // Play/Pause toggle
   const togglePlay = async () => {
@@ -57,19 +67,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   // Handle time update
-  const handleTimeUpdate = () => {
+  const handleTimeUpdate = useCallback(() => {
     if (!videoRef.current) return;
     const currentTime = videoRef.current.currentTime;
     updateState({ currentTime });
     onTimeUpdate?.(currentTime);
-  };
+  }, [updateState, onTimeUpdate]);
 
   // Handle loaded metadata
-  const handleLoadedMetadata = () => {
+  const handleLoadedMetadata = useCallback(() => {
     if (!videoRef.current) return;
     const duration = videoRef.current.duration;
     updateState({ duration, isPlaying: false });
-  };
+  }, [updateState]);
 
   // Handle progress change
   const handleProgressChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,11 +161,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   // Handle video error
-  const handleError = () => {
+  const handleError = useCallback(() => {
     if (!videoRef.current) return;
     const error = new Error(`视频加载失败: ${video.title}`);
     onError?.(error);
-  };
+  }, [video.title, onError]);
 
   // Format time for display
   const formatTime = (seconds: number): string => {
@@ -200,7 +210,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
       videoElement.removeEventListener('error', handleError);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleTimeUpdate, handleLoadedMetadata, handleError]);
 
   return (
     <div className={styles.videoPlayer}>

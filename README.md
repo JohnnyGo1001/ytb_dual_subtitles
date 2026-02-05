@@ -1,447 +1,397 @@
 # YouTube 双语字幕系统
 
-一个支持 YouTube 视频下载和双语字幕播放的现代化 Web 应用。
+一个支持 YouTube 视频下载、管理和双语字幕播放的现代化 Web 应用。
 
-## 功能特性
+## 📋 目录
 
-- 🎥 YouTube 视频下载和管理
-- 🔄 实时下载进度显示
-- 🎬 视频播放和双语字幕同步显示
-- 🌐 现代化的 React Web 用户界面
-- 📁 本地视频文件管理
-- 🌍 多语言翻译支持
-- ⚡ 异步处理和 WebSocket 实时通信
-- 🔒 完善的错误处理和异常管理
+- [产品功能](#-产品功能)
+- [安装步骤](#-安装步骤)
+- [运行方式](#-运行方式)
+- [使用指南](#-使用指南)
+- [项目目录](#-项目目录)
 
-## 项目结构
+---
 
-```
-ytb-dual-subtitles/
-├── .github/                          # GitHub 配置文件
-├── .idea/                            # PyCharm IDE 配置
-├── config/                           # 配置文件目录
-├── scripts/                          # 脚本工具
-├── static/                           # 静态资源
-├── main.py                           # 主程序入口
-├── pyproject.toml                    # Python 项目配置
-├── uv.lock                           # UV 依赖锁定文件
-├── pyrightconfig.json                # Pyright 类型检查配置
-├── README.md                         # 项目说明文档
-├── PROJECT_OVERVIEW.md               # 项目概览文档
-│
-├── src/ytb_dual_subtitles/          # 主要源代码
-│   ├── __init__.py                   # 包初始化文件
-│   ├── __main__.py                   # 模块主入口
-│   │
-│   ├── api/                         # REST API 接口层
-│   │   ├── __init__.py
-│   │   ├── app.py                   # FastAPI 应用入口
-│   │   └── routes/                  # API 路由模块
-│   │       ├── __init__.py
-│   │       ├── downloads.py         # 下载相关路由
-│   │       ├── files.py             # 文件操作路由
-│   │       └── player.py            # 播放器相关路由
-│   │
-│   ├── core/                        # 核心业务逻辑
-│   │   ├── __init__.py
-│   │   ├── database.py              # 数据库管理
-│   │   ├── download_manager.py      # 下载管理器
-│   │   ├── error_handling.py        # 错误处理
-│   │   ├── player.py                # 视频播放器核心
-│   │   ├── settings.py              # 配置管理
-│   │   └── subtitle_generator.py    # 字幕生成器
-│   │
-│   ├── services/                    # 业务服务层
-│   │   ├── __init__.py
-│   │   ├── file_service.py          # 文件服务
-│   │   ├── metadata_service.py      # 元数据服务
-│   │   ├── storage_management.py    # 存储管理
-│   │   ├── storage_service.py       # 存储服务
-│   │   ├── subtitle_data_service.py # 字幕数据服务
-│   │   ├── subtitle_service.py      # 字幕服务
-│   │   ├── translation_service.py   # 翻译服务
-│   │   └── youtube_service.py       # YouTube 服务
-│   │
-│   ├── models/                      # 数据模型
-│   │   ├── __init__.py
-│   │   └── video.py                 # 视频数据模型
-│   │
-│   ├── utils/                       # 工具函数
-│   │   ├── __init__.py
-│   │   └── subtitle_utils.py        # 字幕工具函数
-│   │
-│   ├── exceptions/                  # 自定义异常
-│   │   ├── __init__.py
-│   │   ├── download_errors.py       # 下载异常
-│   │   ├── file_errors.py          # 文件异常
-│   │   └── subtitle_errors.py      # 字幕异常
-│   │
-│   └── web/                         # WebSocket 和 Web 服务
-│       ├── __init__.py
-│       └── websocket.py             # WebSocket 连接管理
-│
-└── frontend/                        # React 前端应用
-    ├── package.json                 # Node.js 依赖配置
-    ├── package-lock.json            # npm 锁定文件
-    ├── tsconfig.json                # TypeScript 配置
-    ├── tsconfig.node.json           # Node.js TypeScript 配置
-    ├── vite.config.ts               # Vite 构建配置
-    └── src/                         # React 源代码
-        ├── main.tsx                 # 应用入口
-        ├── App.tsx                  # 主应用组件
-        ├── components/              # React 组件
-        │   ├── common/              # 通用组件
-        │   ├── download/            # 下载相关组件
-        │   ├── layout/              # 布局组件
-        │   ├── player/              # 播放器组件
-        │   └── video/               # 视频相关组件
-        ├── contexts/                # React 上下文
-        ├── hooks/                   # 自定义 Hooks
-        ├── pages/                   # 页面组件
-        ├── services/                # 前端服务
-        ├── types/                   # TypeScript 类型定义
-        ├── utils/                   # 前端工具函数
-        └── styles/                  # 样式文件
-```
+## ✨ 产品功能
 
-### 架构说明
+### 核心功能
 
-#### 后端架构
-- **API 层**: FastAPI 基础的 REST API
-- **核心层**: 业务逻辑和核心功能
-- **服务层**: 具体业务服务实现
-- **模型层**: 数据模型定义
-- **工具层**: 通用工具函数
-- **异常层**: 自定义异常处理
+- **视频下载与管理**
+  - 🎥 输入 YouTube URL 快速下载视频
+  - 📊 实时显示下载进度、速度和剩余时间
+  - 📁 自动分类管理下载的视频
+  - 🔍 支持搜索和排序视频列表
 
-#### 前端架构
-- **组件化**: React 组件化开发
-- **状态管理**: Context API 状态管理
-- **类型安全**: TypeScript 类型检查
-- **构建工具**: Vite 快速构建
+- **双语字幕播放**
+  - 🎬 内置视频播放器，支持双语字幕同步显示
+  - 🌐 自动下载并翻译字幕（支持多种语言）
+  - 📥 导出字幕文件（SRT 格式）
+  - 🎯 字幕精准定位和高亮显示
+---
 
-#### 开发特性
-- **类型检查**: Python 类型提示 + TypeScript
-- **代码质量**: Ruff + ESLint 代码检查
-- **自动化**: Pre-commit hooks 自动检查
+## ⚠️ 使用前提条件
 
-## 技术栈
+在开始使用本系统之前，请确保满足以下条件：
 
-- **后端**: Python 3.11+, FastAPI, uvicorn
-- **前端**: React, TypeScript, Vite
-- **视频处理**: yt-dlp
-- **数据存储**: SQLite (生产环境可使用 PostgreSQL)
-- **异步处理**: asyncio, aiofiles
-- **实时通信**: WebSockets
-- **翻译服务**: Google Translate API
-- **开发工具**: uv, ruff, mypy
+### 必备条件
 
-## 快速开始
+1. **YouTube 账号**
+   - 需要有效的 YouTube 账号用于访问视频内容
 
-### 环境要求
+2. **网络环境**
+   - 需要能够正常访问 YouTube 的网络环境（VPN 翻墙工具）
+   - 确保网络连接稳定，以便下载视频和字幕
 
-- Python 3.11 或更高版本
-- Node.js 16+ (用于前端开发)
+3. **Chrome 浏览器登录**
+   - **重要**：在下载视频前，需要使用 Chrome 浏览器登录 YouTube 网站
+   - 系统会自动获取 Chrome 浏览器中的 YouTube Cookie，用于验证身份和下载视频
+   - 确保 Chrome 浏览器已安装并登录 YouTube 账号
 
-### 项目设置
+### 准备步骤
 
-#### 1. 克隆项目
 ```bash
+# 1. 确保已安装 Chrome 浏览器
+# 2. 打开 Chrome 浏览器访问 https://www.youtube.com
+# 3. 使用您的 YouTube 账号登录
+# 4. 登录成功后，关闭浏览器即可
+# 5. 系统会在下载时自动读取 Cookie 进行身份验证
+```
+
+**注意**：如果下载时遇到身份验证问题，请确认 Chrome 浏览器中的 YouTube 登录状态是否有效。
+
+---
+
+## 🚀 安装步骤
+
+### 前置环境准备
+
+假设您使用全新的 Mac 电脑，需要依次安装以下环境：
+
+#### 1. 安装 Homebrew
+
+Homebrew 是 macOS 的包管理器，用于安装其他开发工具。
+
+```bash
+# 打开终端（Terminal），执行以下命令
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 安装完成后，根据提示将 Homebrew 添加到 PATH
+```
+
+#### 2. 安装 Python 3.11+
+
+```bash
+# 使用 Homebrew 安装 Python
+brew install python@3.11
+
+# 验证安装
+python3 --version  # 应显示 Python 3.11.x 或更高版本
+```
+
+#### 3. 安装 uv（Python 包管理器）
+
+uv 是一个快速的 Python 包管理器，比传统的 pip 更快。
+
+```bash
+# 使用 Homebrew 安装 uv
+brew install uv
+
+# 验证安装
+uv --version
+```
+
+#### 4. 安装 Node.js 和 npm
+
+Node.js 用于前端开发和构建。
+
+```bash
+# 使用 Homebrew 安装 Node.js（包含 npm）
+brew install node
+
+# 验证安装
+node --version  # 应显示 v18.x 或更高版本
+npm --version
+```
+
+#### 5. 安装 Git（可选，用于克隆项目）
+
+```bash
+# 使用 Homebrew 安装 Git
+brew install git
+
+# 验证安装
+git --version
+```
+
+### 项目安装
+
+#### 1. 获取项目代码
+
+```bash
+# 如果使用 Git
 git clone <repository-url>
-cd ytb-dual-subtitles
+cd ytb_dual_subtitles
+
+# 或者直接下载项目压缩包并解压
 ```
 
-#### 2. 安装依赖
+#### 2. 安装后端依赖
 
 ```bash
-# 使用 uv 安装 Python 依赖（推荐）
+# 在项目根目录执行
 uv sync
 
-# 安装开发依赖
+# 如果需要开发工具（可选）
 uv sync --extra dev
+```
 
-# 或使用 pip
-pip install -e .
+#### 3. 安装前端依赖
 
-# 安装前端依赖
+```bash
+# 进入前端目录
 cd frontend
+
+# 安装依赖
 npm install
+
+# 返回项目根目录
+cd ..
 ```
 
-#### 3. 设置开发环境
-```bash
-# 设置 pre-commit 钩子（可选）
-uv run pre-commit install
-```
+---
 
-### 开发环境启动
+## 🎮 运行方式
 
-1. **启动后端服务**:
+### 开发环境运行
+
+适合开发和调试，前后端分别启动。
+
+#### 启动后端服务
+
 ```bash
-# 使用 uv 运行（推荐）
+# 在项目根目录执行
 uv run python -m ytb_dual_subtitles
+
+# 后端服务将在 http://localhost:8000 启动
 ```
 
-2. **启动前端开发服务器**:
+#### 启动前端服务
+
 ```bash
+# 打开新的终端窗口，进入前端目录
 cd frontend
+
+# 启动前端开发服务器
 npm run dev
+
+# 前端应用将在 http://localhost:5173 启动
 ```
 
-### 生产环境部署
+#### 访问应用
+
+打开浏览器访问：
+- **前端界面**：http://localhost:5173
+- **后端 API 文档**：http://localhost:8000/docs
+
+### 生产环境运行
+
+适合日常使用，前端打包后由后端统一提供服务。
 
 ```bash
-# 构建前端
+# 1. 构建前端（只需执行一次）
 cd frontend
 npm run build
+cd ..
 
-# 启动生产服务器
+# 2. 启动服务
 uv run ytb-subtitles
+
+# 访问 http://localhost:8000
 ```
 
-### 访问应用
+### 常用命令
 
-- **开发环境**:
-  - 后端 API: http://localhost:8000
-  - 前端应用: http://localhost:5173
-- **生产环境**: http://localhost:8000
+```bash
+# 停止服务：在终端按 Ctrl + C
 
-## API 接口
+# 重启服务：再次执行启动命令
 
-### 统一响应格式
-
-所有 API 接口都返回统一的响应格式：
-
-```json
-{
-  "success": true,         // 操作是否成功
-  "data": {...},          // 实际返回的数据
-  "error_code": null,     // 错误码（仅在失败时）
-  "error_msg": null       // 错误信息（仅在失败时）
-}
+# 查看日志：启动服务后会在终端显示日志
 ```
 
-### 主要端点
+---
 
-**下载管理**:
-- `POST /api/downloads` - 创建下载任务
-- `GET /api/downloads/{task_id}` - 获取下载任务状态
-- `GET /api/list/downloads` - 获取所有下载任务列表
-- `DELETE /api/downloads/{task_id}` - 取消下载任务
-- `GET /api/status` - 获取所有任务状态（用于轮询）
-- `GET /api/status/{task_id}` - 获取特定任务状态
+## 📖 使用指南
 
-**文件管理**:
-- `GET /api/videos` - 获取视频列表（支持搜索、分页、筛选）
-- `DELETE /api/videos/{video_id}` - 删除视频及相关文件
+### 1. 下载视频
 
-**系统信息**:
-- `GET /` - 系统健康检查
-- `GET /health` - 详细健康状态
+1. 在首页（下载页）的输入框中粘贴 YouTube 视频链接
+2. 选择下载选项（视频质量、字幕语言等）
+3. 点击"下载"按钮
+4. 等待下载完成，可以在"当前下载"区域查看进度
 
-### 错误码
+### 2. 浏览视频
 
-常用错误码定义：
+1. 点击顶部导航栏的"视频列表"
+2. 左侧边栏显示所有分类
+   - 点击"全部"查看所有视频
+   - 点击特定分类查看该分类下的视频
+3. 使用搜索框快速查找视频
+4. 点击视频卡片播放视频
 
-- `INVALID_URL` - 无效的 YouTube URL
-- `DOWNLOAD_FAILED` - 下载失败
-- `TASK_NOT_FOUND` - 任务未找到
-- `FILE_NOT_FOUND` - 文件未找到
-- `VALIDATION_ERROR` - 请求参数验证错误
-- `INTERNAL_ERROR` - 内部服务器错误
+### 3. 管理分类
 
-**文档资源**:
-- 交互式 API 文档: http://localhost:8000/docs
-- API 使用示例: [API_EXAMPLES.md](./API_EXAMPLES.md)
-- Redoc 文档: http://localhost:8000/redoc
+**创建分类**：
+1. 在视频列表页左侧边栏底部
+2. 点击"➕ 添加分类"按钮
+3. 输入分类名称，按回车或点击 ✓ 保存
 
-## 文件存储
+**编辑分类**：
+1. 鼠标悬停在分类上，点击 ✏️ 编辑按钮
+2. 修改分类名称，按回车或点击 ✓ 保存
 
-系统会自动创建以下目录结构来存储下载的视频、字幕和相关文件：
+**删除分类**：
+1. 鼠标悬停在分类上，点击 🗑️ 删除按钮
+2. 确认删除（该分类下的视频会移至"未分类"）
 
-### 默认存储路径
+### 4. 管理视频
+
+**移动视频到分类**：
+1. 鼠标悬停在视频卡片上
+2. 点击右上角的三点菜单（⋮）
+3. 选择"🏷️ 移动到分类"
+4. 选择目标分类
+
+**导出字幕**：
+1. 点击视频卡片右上角的三点菜单（⋮）
+2. 选择"📥 导出字幕"
+3. 字幕文件会自动下载（SRT 格式）
+
+**删除视频**：
+1. 点击视频卡片右上角的三点菜单（⋮）
+2. 选择"🗑️ 删除视频"
+3. 确认删除
+
+### 5. 观看视频与字幕
+
+1. 点击视频卡片进入播放页
+2. 视频自动播放，字幕同步显示
+3. 字幕显示格式：
+   - 上方：中文翻译
+   - 下方：原文（英文）
+4. 当前播放的字幕会高亮显示
+5. 使用播放器控制栏调整音量、进度等
+
+### 6. 搜索与排序
+
+**搜索视频**：
+- 在搜索框输入关键词（标题、频道名称等）
+- 按回车或点击搜索按钮
+
+**排序视频**：
+- 点击搜索框旁的排序选项
+- 支持按创建时间、标题、时长等排序
+- 支持升序和降序
+
+---
+
+## 📁 项目目录
 
 ```
-~/ytb/                              # 用户主目录下的 ytb 文件夹
-├── videos/                         # 视频文件存储目录
-│   ├── [视频标题].mp4              # 下载的视频文件
-│   ├── [视频标题].webm             # 或其他格式的视频文件
-│   └── ...
+ytb_dual_subtitles/
 │
-├── subtitles/                      # 字幕文件存储目录
-│   ├── [视频标题]/                 # 按视频分组的字幕文件夹
-│   │   ├── [视频标题].en.vtt       # 英文字幕文件
-│   │   ├── [视频标题].zh-CN.vtt    # 中文简体字幕文件
-│   │   ├── [视频标题].zh-TW.vtt    # 中文繁体字幕文件
-│   │   └── [视频标题].[lang].vtt   # 其他语言字幕文件
-│   └── ...
+├── frontend/                      # 前端应用（React + TypeScript）
+│   ├── src/
+│   │   ├── container/            # 页面容器组件
+│   │   │   ├── DownloadPage/     # 下载页面
+│   │   │   ├── VideoListPage/    # 视频列表页
+│   │   │   └── PlayerPage/       # 播放器页面
+│   │   ├── components/           # 通用组件
+│   │   ├── services/             # API 服务
+│   │   ├── hooks/                # 自定义 Hooks
+│   │   ├── contexts/             # React Context
+│   │   └── types/                # TypeScript 类型定义
+│   ├── package.json              # 前端依赖配置
+│   └── vite.config.ts            # Vite 构建配置
 │
-└── data/                           # 应用数据目录
-    ├── ytb.db                      # SQLite 数据库文件
-    ├── thumbnails/                 # 视频缩略图
-    └── metadata/                   # 视频元数据
+├── src/ytb_dual_subtitles/       # 后端应用（Python + FastAPI）
+│   ├── api/                      # REST API 接口
+│   │   ├── app.py               # FastAPI 应用入口
+│   │   └── routes/              # API 路由
+│   │       ├── downloads.py     # 下载管理 API
+│   │       ├── files.py         # 文件管理 API
+│   │       ├── categories.py    # 分类管理 API
+│   │       └── player.py        # 播放器 API
+│   │
+│   ├── core/                     # 核心业务逻辑
+│   │   ├── database.py          # 数据库管理
+│   │   ├── download_manager.py  # 下载管理器
+│   │   ├── settings.py          # 配置管理
+│   │   └── subtitle_generator.py # 字幕生成器
+│   │
+│   ├── services/                 # 业务服务层
+│   │   ├── youtube_service.py   # YouTube 视频服务
+│   │   ├── subtitle_service.py  # 字幕处理服务
+│   │   ├── translation_service.py # 翻译服务
+│   │   └── file_service.py      # 文件管理服务
+│   │
+│   ├── models/                   # 数据模型
+│   │   ├── video.py             # 视频数据模型
+│   │   └── category.py          # 分类数据模型
+│   │
+│   └── utils/                    # 工具函数
+│
+├── pyproject.toml                # Python 项目配置
+├── uv.lock                       # uv 依赖锁定文件
+└── README.md                     # 项目说明文档
 ```
 
-### 支持的文件格式
+### 核心模块说明
 
-#### 视频格式
-- **MP4** (推荐): 兼容性最佳，支持所有现代浏览器
-- **WebM**: Google 开发的开放格式
-- **MKV**: 高质量视频格式
-- **AVI**: 传统视频格式
-- **MOV**: QuickTime 视频格式
+**前端模块**：
+- `DownloadPage`：视频下载页面，输入 URL 并管理下载任务
+- `VideoListPage`：视频列表页面，展示和管理已下载的视频
+- `PlayerPage`：视频播放页面，播放视频并显示双语字幕
 
-#### 字幕格式
-- **VTT** (推荐): Web 标准字幕格式，支持样式和定位
-- **SRT**: 通用字幕格式，简单易用
-- **ASS/SSA**: 高级字幕格式，支持复杂样式
+**后端模块**：
+- `api/routes`：定义所有 HTTP API 接口
+- `core`：核心业务逻辑，如下载管理、数据库操作
+- `services`：具体业务服务实现，如 YouTube 视频获取、字幕翻译
+- `models`：数据模型定义，与数据库表对应
 
-#### 支持的字幕语言
-- **en**: 英语
-- **zh-CN**: 中文简体
-- **zh-TW**: 中文繁体
-- **ja**: 日语
-- **ko**: 韩语
-- **es**: 西班牙语
-- **fr**: 法语
-- **de**: 德语
+### 数据存储
 
-### 自定义存储路径
+默认情况下，系统会在用户主目录下创建 `~/ytb/` 文件夹：
 
-可以通过环境变量自定义存储路径：
-
-```bash
-# 设置自定义视频存储路径
-export YTB_DOWNLOAD_PATH="/path/to/your/videos"
-
-# 设置自定义字幕存储路径
-export YTB_SUBTITLE_PATH="/path/to/your/subtitles"
-
-# 设置自定义数据存储路径
-export YTB_DATA_PATH="/path/to/your/data"
+```
+~/ytb/
+├── videos/          # 视频文件
+├── subtitles/       # 字幕文件
+└── data/           # 数据库文件
+    └── ytb.db      # SQLite 数据库
 ```
 
-或在项目根目录创建 `.env` 文件：
+---
 
-```env
-YTB_DOWNLOAD_PATH=/path/to/your/videos
-YTB_SUBTITLE_PATH=/path/to/your/subtitles
-YTB_DATA_PATH=/path/to/your/data
-```
+## 🔧 常见问题
 
-### 文件命名规则
+**问：下载视频时提示"无效的 URL"**
+答：请确保粘贴的是完整的 YouTube 视频链接，格式类似：`https://www.youtube.com/watch?v=xxxxx`
 
-- **视频文件**: 使用 YouTube 视频标题作为文件名，自动清理不安全字符
-- **字幕文件**: 格式为 `[视频标题].[语言代码].[格式后缀]`
-- **特殊字符处理**: 自动替换或移除文件系统不支持的字符
-- **重复文件**: 如果文件已存在，会自动添加数字后缀
+**问：字幕没有显示**
+答：请确保下载视频时选择了下载字幕选项，或者该视频确实有字幕可用。
 
-### 存储空间管理
+**问：视频无法播放**
+答：请确认视频文件已完整下载，可以尝试重新下载该视频。
 
-- **默认限制**: 单个文件最大 5GB
-- **自动清理**: 支持清理临时文件和不完整的下载
-- **空间检查**: 下载前自动检查可用磁盘空间
-- **压缩优化**: 自动选择合适的视频质量以节省空间
+**问：如何修改存储路径**
+答：可以通过设置环境变量 `YTB_DOWNLOAD_PATH` 来指定自定义存储路径。
 
-## 代码质量
+**问：端口被占用无法启动**
+答：确保 8000 端口（后端）和 5173 端口（前端开发）没有被其他程序占用。
 
-项目严格遵循 Python 编码规范，使用多种工具确保代码质量：
+---
 
-### 代码格式化和检查
-```bash
-# 检查代码
-uv run ruff check .
-
-# 自动修复代码问题
-uv run ruff check . --fix
-
-# 格式化代码
-uv run ruff format .
-```
-
-### 类型检查
-```bash
-# 运行类型检查
-uv run mypy src/ytb_dual_subtitles/
-```
-
-### 依赖管理
-```bash
-# 添加新的生产依赖
-uv add package-name
-
-# 添加开发依赖
-uv add --dev package-name
-
-# 更新所有依赖
-uv sync --upgrade
-```
-
-## 开发指南
-
-### 开发最佳实践
-
-项目遵循现代化的 Python 开发最佳实践：
-
-- **架构设计**: 使用 FastAPI 构建高性能 Web API，采用分层架构
-- **异步编程**: 采用 asyncio 和异步编程模式提高并发性能
-- **前端技术**: 集成 React + TypeScript + Vite 现代前端技术栈
-- **错误处理**: 完善的错误处理和日志记录机制
-- **异步处理**: 采用 asyncio 和异步编程模式提高并发性能
-
-### 开发流程
-
-1. **功能开发**:
-   - 创建功能分支：`git checkout -b feature/your-feature-name`
-   - 编写代码并遵循项目规范
-   - 运行代码检查确保质量合规
-   - 提交代码：`git commit -m "feat: add new feature"`
-
-2. **代码审查**:
-   - 推送分支：`git push origin feature/your-feature-name`
-   - 创建 Pull Request
-   - 等待代码审查和合并
-
-3. **发布流程**:
-   - 更新版本号
-   - 创建发布标签
-   - 部署到生产环境
-
-## 故障排除
-
-### 常见问题
-
-1. **模块导入错误**:
-   ```bash
-   # 确保在项目根目录并已安装依赖
-   uv sync
-   ```
-
-2. **前端无法访问后端 API**:
-   - 检查后端服务是否运行在 http://localhost:8000
-   - 确认 CORS 设置正确
-
-3. **类型检查失败**:
-   ```bash
-   # 检查 mypy 配置和类型注解
-   uv run mypy src/ytb_dual_subtitles/ --show-error-codes
-   ```
-
-4. **代码检查失败**:
-   ```bash
-   # 运行详细代码检查
-   uv run ruff check . --show-source
-   uv run mypy src/ytb_dual_subtitles/ --show-error-codes
-   ```
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！在提交代码前，请确保：
-
-1. 代码通过 lint 检查和类型检查
-2. 遵循项目编码规范
-3. 更新了相关文档
-
-## 许可证
+## 📄 许可证
 
 MIT License - 详见 LICENSE 文件。

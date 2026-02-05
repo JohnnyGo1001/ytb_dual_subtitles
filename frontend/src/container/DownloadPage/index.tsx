@@ -241,20 +241,13 @@ function DownloadPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.hero}>
-        <h1 className={styles.title}>YouTube双语字幕系统</h1>
-        <p className={styles.subtitle}>
-          下载YouTube视频并生成中英文双语字幕，提升学习体验
-        </p>
-        {!isConnected && (
-          <div className={styles.connectionWarning}>
-            ⚠️ 实时进度更新已断开，请检查服务器连接
-          </div>
-        )}
-      </div>
+      {!isConnected && (
+        <div className={styles.connectionWarning}>
+          ⚠️ 实时进度更新已断开，请检查服务器连接
+        </div>
+      )}
 
       <div className={styles.downloadSection}>
-        <h2 className={styles.sectionTitle}>下载视频</h2>
         <DownloadForm onDownloadStart={handleDownloadStart} activeTasks={activeTasks} />
       </div>
 

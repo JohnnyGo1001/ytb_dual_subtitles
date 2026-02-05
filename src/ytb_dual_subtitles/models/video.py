@@ -66,6 +66,8 @@ class Video(Base):
     duration: Mapped[int | None] = mapped_column(Integer)  # Duration in seconds
     thumbnail_url: Mapped[str | None] = mapped_column(Text)
     file_path: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str | None] = mapped_column(String(100), default="未分类", index=True)  # Video category
+    channel_name: Mapped[str | None] = mapped_column(String(200), index=True)  # Channel name for auto-categorization
     status: Mapped[VideoStatus] = mapped_column(
         String(20),
         default=VideoStatus.PENDING,
@@ -103,7 +105,7 @@ class Subtitle(Base):
         index=True
     )
     language: Mapped[str] = mapped_column(String(10), nullable=False)
-    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    language_name: Mapped[str | None] = mapped_column(String(50))  # Display name for language
     source_type: Mapped[SubtitleSourceType] = mapped_column(
         String(20),
         default=SubtitleSourceType.YOUTUBE

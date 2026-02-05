@@ -4,11 +4,12 @@
   border-radius: var(--border-radius);
   overflow: hidden;
   transition: all 0.2s ease;
+  cursor: pointer;
+}
 
-  .videoCard:hover {
-    box-shadow: 0 4px 12px var(--shadow);
-    transform: translateY(-2px);
-  }
+.videoCard:hover {
+  box-shadow: 0 4px 12px var(--shadow);
+  transform: translateY(-2px);
 }
 
 .thumbnail {
@@ -16,7 +17,7 @@
   width: 100%;
   height: 180px;
   background: var(--bg-primary);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .thumbnailImage {
@@ -48,55 +49,124 @@
   font-weight: 500;
 }
 
+.menuContainer {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+}
+
+.menuButton {
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  opacity: 0;
+}
+
+.videoCard:hover .menuButton {
+  opacity: 1;
+}
+
+.menuButton:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.05);
+}
+
+.menuDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  min-width: 160px;
+  z-index: 100;
+}
+
+.menuItem {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: none;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.menuItem:hover {
+  background: var(--bg-primary);
+}
+
+.menuItem.danger {
+  color: #ef4444;
+}
+
+.menuItem.danger:hover {
+  background: #fee;
+}
+
+.categorySelectorWrapper {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+}
+
 .content {
   padding: var(--spacing-md);
 }
 
 .title {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 var(--spacing-sm) 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
 }
 
 .metadata {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  gap: 0.25rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 
 .channel {
   font-weight: 500;
-}
-
-.size,
-.views {
-  color: var(--text-tertiary);
-}
-
-.description {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin: 0 0 var(--spacing-md) 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.actions {
-  display: flex;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
+.size {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
 }
 
 /* 响应式设计 */

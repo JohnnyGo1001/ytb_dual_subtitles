@@ -201,32 +201,65 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Marimo
+# ==================== 项目特定配置 ====================
+
+# 开发文档目录（已移至 docs/）
+docs/
+
+# 临时脚本目录（已移至 scripts/）
+scripts/
+
+# 开发和测试相关
+tests/
+*.log
+
+# 数据库文件（运行时生成）
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# IDE 和编辑器配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI 工具配置
+.claude/
+.common_claude/
+.cursor/
+.cursorignore
+.cursorindexingignore
+
+# 类型检查配置（开发工具）
+pyrightconfig.json
+
+# 前端构建和依赖（运行时生成）
+frontend/dist/
+frontend/node_modules/
+frontend/build/
+frontend/.vite/
+
+# Python 虚拟环境（运行时生成）
+.venv/
+venv/
+env/
+
+# Marimo 相关
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-.claude/
-docs/
-tests/
-.common_claude/
-.venv/
-frontend/dist
-frontend/node_modules
-frontend/tests
-.idea/
-.gitignore
-API_EXAMPLES.md
-CHANGES_SUMMARY.md
-FRONTEND_API_MIGRATION_GUIDE.md
-IMPLEMENTATION_COMPLETE.md
-IMPLEMENTATION_SUMMARY.md
-migrate_add_title_index.py
-migrate_download_tasks_title_index.py
-migrate_videos_title_index.py
-test_title_deduplication.py
-TITLE_DEDUPLICATION.md
-TITLE_DEDUPLICATION_USAGE.md
-view_changes.sh
-ytb.db
-pyrightconfig.json
 
+# macOS 系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 临时文件和备份
+*.tmp
+*.temp
+*.bak
+*.backup
+*~

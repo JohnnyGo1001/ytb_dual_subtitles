@@ -42,7 +42,11 @@
 .subtitleSection {
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
-  padding: var(--spacing-lg);
+  padding: 0; /* 移除内边距，让字幕组件控制 */
+  max-height: 400px; /* 限制最大高度为 400px */
+  overflow: hidden; /* 隐藏溢出 */
+  display: flex;
+  flex-direction: column;
 }
 
 .loadingContainer,
@@ -100,5 +104,9 @@
   .metadata {
     flex-direction: column;
     gap: var(--spacing-sm);
+  }
+
+  .subtitleSection {
+    max-height: 300px; /* 移动端更小 */
   }
 }

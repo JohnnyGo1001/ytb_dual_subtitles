@@ -17,6 +17,17 @@ export interface Video extends BaseEntity {
   channel_name?: string;
   status?: string;
   has_subtitles?: boolean;
+  category?: string;
+}
+
+export interface VideoCategory {
+  name: string;
+  count: number;
+  collapsed?: boolean;
+}
+
+export interface GroupedVideos {
+  [category: string]: Video[];
 }
 
 export interface SubtitleSegment {

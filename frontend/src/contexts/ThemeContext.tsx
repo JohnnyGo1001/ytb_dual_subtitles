@@ -16,7 +16,7 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('dark');
 
   useEffect(() => {
     // 从localStorage读取主题设置
@@ -24,8 +24,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
       setTheme(savedTheme);
     } else {
-      // 默认使用白色(浅色)主题
-      setTheme('light');
+      // 默认使用暗色主题
+      setTheme('dark');
     }
   }, []);
 

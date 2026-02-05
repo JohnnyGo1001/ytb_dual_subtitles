@@ -299,17 +299,55 @@ class DownloadManager:
     async def _download_task(self, task: DownloadTask) -> None:
         """Execute the download for a task with retry mechanism.
 
+        Complete workflow:
+        1. Download video (0-60% progress)
+        2. Process and import subtitles (60-80% progress)
+        3. Generate and embed dual subtitles (80-100% progress)
+
         Args:
             task: Download task to execute
         """
         try:
             async with self._semaphore:
+                # Fetch video info first to get title
+                try:
+                    video_id = self._youtube_service.extract_video_id(task.url)
+                    video_info = await self._youtube_service.get_video_info(video_id)
+                    title = video_info.get("title", "未知标题")
+
+                    # Update task with title immediately
+                    self._task_dao.update_task(task.task_id, {
+                        'title': title,
+                        'status_message': f'正在下载: {title}',
+                        'progress': 0
+                    })
+                except Exception as e:
+                    print(f"Failed to get video info, continuing with download: {e}")
+                    title = "未知标题"
+
                 while True:
                     try:
-                        # Attempt download with new filename scheme
+                        # Step 1: Download video (0-60% progress)
                         filename = self._youtube_service.generate_filename_from_url(task.url)
                         file_path = self._storage_service.generate_file_path_from_url(filename)
+
+                        self._task_dao.update_task(task.task_id, {
+                            'status_message': f'下载视频中: {title}',
+                            'progress': 10
+                        })
+
                         await self._youtube_service.download_video(task.url, task.task_id, str(file_path))
+
+                        # Video download complete
+                        self._task_dao.update_task(task.task_id, {
+                            'status_message': f'视频下载完成，处理字幕中...',
+                            'progress': 60
+                        })
+
+                        # Step 2: Process subtitles (already handled in _complete_task)
+                        # This will be done in _complete_task -> _create_video_record -> _import_subtitles
+
+                        # Complete task with subtitle processing
                         await self._complete_task(task, success=True)
                         return  # Success, exit retry loop
 
@@ -373,11 +411,29 @@ class DownloadManager:
         """
         # Update task status
         if success and task.status != DownloadTaskStatus.ERROR:
+            # Video download successful, now process subtitles
+            # Update progress to 70% - subtitle import in progress
+            self._task_dao.update_task(task.task_id, {
+                'status_message': '导入字幕中...',
+                'progress': 70
+            })
+
+            # Create video record and import subtitles
+            video_id = await self._create_video_record(task)
+
+            if video_id:
+                # Step 3: Generate and embed dual subtitles (80-100% progress)
+                self._task_dao.update_task(task.task_id, {
+                    'status_message': '生成双语字幕中...',
+                    'progress': 80
+                })
+
+                # Process dual subtitles
+                await self._process_dual_subtitles(video_id, task)
+
             task.status = DownloadTaskStatus.COMPLETED
             task.progress = 100
 
-            # If download was successful, get video info and create video record
-            await self._create_video_record(task)
         elif task.status != DownloadTaskStatus.ERROR:
             task.status = DownloadTaskStatus.FAILED
 
@@ -388,7 +444,8 @@ class DownloadManager:
             'status': task.status.value,
             'progress': task.progress,
             'completed_at': task.completed_at.isoformat(),
-            'error_message': task.error_message
+            'error_message': task.error_message,
+            'status_message': '下载完成' if success else task.error_message
         }
 
         self._task_dao.update_task(task.task_id, updates)
@@ -397,11 +454,14 @@ class DownloadManager:
         if task.task_id in self._running_tasks:
             del self._running_tasks[task.task_id]
 
-    async def _create_video_record(self, task: DownloadTask) -> None:
+    async def _create_video_record(self, task: DownloadTask) -> int | None:
         """Create a video record in the videos table after successful download.
 
         Args:
             task: Completed download task
+
+        Returns:
+            Video ID if successful, None otherwise
         """
         try:
             # Extract video ID from URL
@@ -439,7 +499,7 @@ class DownloadManager:
                     self._task_dao.update_task(task.task_id, {
                         'title': video_title
                     })
-                    return
+                    return existing.id
 
                 # Create new video record
                 video = Video(
@@ -453,16 +513,388 @@ class DownloadManager:
 
                 session.add(video)
                 await session.commit()
-                print(f"Created video record for: {video_title}")
+                await session.refresh(video)  # Refresh to get the ID
+                print(f"Created video record for: {video_title} (ID: {video.id})")
+
+                # Process and import subtitles
+                await self._import_subtitles(video, file_path, session)
 
                 # Update download task with title
                 self._task_dao.update_task(task.task_id, {
                     'title': video_title
                 })
 
+                return video.id
+
         except Exception as e:
             print(f"Failed to create video record: {e}")
-            # Don't re-raise the exception to avoid failing the download task
+            import traceback
+            traceback.print_exc()
+            return None
+
+    async def _import_subtitles(self, video: Any, video_path: str, session: Any) -> None:
+        """Import subtitle files downloaded by yt-dlp.
+
+        Args:
+            video: Video record from database
+            video_path: Path to the video file
+            session: Database session
+        """
+        try:
+            from pathlib import Path
+            from ytb_dual_subtitles.models.video import Subtitle, SubtitleSegment, SubtitleSourceType
+
+            video_path_obj = Path(video_path)
+            base_path = video_path_obj.parent
+            base_name = video_path_obj.stem
+
+            # Find all subtitle files (yt-dlp names them like: video.en.vtt, video.zh-CN.vtt)
+            subtitle_files = list(base_path.glob(f"{base_name}.*.vtt"))
+
+            if not subtitle_files:
+                print(f"No subtitle files found for: {base_name}")
+                return
+
+            for subtitle_file in subtitle_files:
+                try:
+                    # Extract language from filename (e.g., "video.en.vtt" -> "en")
+                    parts = subtitle_file.stem.split('.')
+                    if len(parts) < 2:
+                        continue
+                    language = parts[-1]
+
+                    # Map language codes to display names
+                    language_map = {
+                        'en': 'English',
+                        'zh-Hans': '简体中文',
+                        'zh-Hant': '繁體中文',
+                        'zh-CN': '简体中文',
+                        'zh-TW': '繁體中文',
+                        'ja': '日本語',
+                        'ko': '한국어',
+                        'es': 'Español',
+                        'fr': 'Français',
+                        'de': 'Deutsch',
+                    }
+                    language_name = language_map.get(language, language)
+
+                    # Parse VTT file
+                    segments = await self._parse_vtt_file(subtitle_file)
+
+                    if not segments:
+                        print(f"No segments found in: {subtitle_file}")
+                        continue
+
+                    # Create subtitle record
+                    subtitle = Subtitle(
+                        video_id=video.id,
+                        language=language,
+                        language_name=language_name,
+                        source_type=SubtitleSourceType.YOUTUBE
+                    )
+                    session.add(subtitle)
+                    await session.flush()  # Get subtitle ID
+
+                    # Create subtitle segments
+                    for seq, seg in enumerate(segments, start=1):
+                        segment = SubtitleSegment(
+                            subtitle_id=subtitle.id,
+                            sequence=seq,
+                            start_time=seg['start'],
+                            end_time=seg['end'],
+                            text=seg['text']
+                        )
+                        session.add(segment)
+
+                    await session.commit()
+                    print(f"Imported {len(segments)} subtitle segments for language: {language}")
+
+                except Exception as e:
+                    print(f"Failed to import subtitle {subtitle_file}: {e}")
+                    await session.rollback()
+                    continue
+
+        except Exception as e:
+            print(f"Failed to import subtitles: {e}")
+
+    async def _parse_vtt_file(self, vtt_path: Path) -> list[dict[str, Any]]:
+        """Parse WebVTT subtitle file.
+
+        Args:
+            vtt_path: Path to VTT file
+
+        Returns:
+            List of subtitle segments with start, end, and text
+        """
+        import re
+
+        segments = []
+
+        try:
+            with open(vtt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # WebVTT format: timestamp --> timestamp followed by text
+            # Example:
+            # 00:00:00.000 --> 00:00:03.500
+            # Hello, welcome to this tutorial.
+
+            # Split by double newlines to get blocks
+            blocks = re.split(r'\n\n+', content)
+
+            for block in blocks:
+                # Skip WEBVTT header and empty blocks
+                if not block.strip() or block.strip().startswith('WEBVTT') or block.strip().startswith('NOTE'):
+                    continue
+
+                lines = block.strip().split('\n')
+
+                # Find the timestamp line
+                timestamp_line = None
+                text_lines = []
+
+                for line in lines:
+                    if '-->' in line:
+                        timestamp_line = line
+                    elif timestamp_line:  # After timestamp, it's text
+                        # Remove VTT formatting tags like <c>, </c>
+                        clean_line = re.sub(r'<[^>]+>', '', line)
+                        if clean_line.strip():
+                            text_lines.append(clean_line.strip())
+
+                if timestamp_line and text_lines:
+                    # Parse timestamps
+                    match = re.match(r'([\d:\.]+)\s*-->\s*([\d:\.]+)', timestamp_line)
+                    if match:
+                        start_str = match.group(1)
+                        end_str = match.group(2)
+
+                        # Convert timestamp to seconds
+                        start_time = self._timestamp_to_seconds(start_str)
+                        end_time = self._timestamp_to_seconds(end_str)
+
+                        segments.append({
+                            'start': start_time,
+                            'end': end_time,
+                            'text': ' '.join(text_lines)
+                        })
+
+            return segments
+
+        except Exception as e:
+            print(f"Error parsing VTT file {vtt_path}: {e}")
+            return []
+
+    def _timestamp_to_seconds(self, timestamp: str) -> float:
+        """Convert VTT timestamp to seconds.
+
+        Args:
+            timestamp: Timestamp string (e.g., "00:01:30.500" or "01:30.500")
+
+        Returns:
+            Time in seconds
+        """
+        parts = timestamp.split(':')
+
+        if len(parts) == 3:  # HH:MM:SS.mmm
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = float(parts[2])
+            return hours * 3600 + minutes * 60 + seconds
+        elif len(parts) == 2:  # MM:SS.mmm
+            minutes = int(parts[0])
+            seconds = float(parts[1])
+            return minutes * 60 + seconds
+        else:  # SS.mmm
+            return float(parts[0])
+
+    async def _process_dual_subtitles(self, video_id: int, task: DownloadTask) -> None:
+        """Generate and embed dual subtitles into video.
+
+        Args:
+            video_id: Database ID of the video
+            task: Download task for progress tracking
+        """
+        try:
+            import subprocess
+            from pathlib import Path
+            from datetime import timedelta
+            from sqlalchemy import select
+            from ytb_dual_subtitles.core.database import get_db_session
+            from ytb_dual_subtitles.models.video import Video, Subtitle, SubtitleSegment
+
+            print(f"Processing dual subtitles for video ID: {video_id}")
+
+            # Get video record
+            async with get_db_session() as session:
+                video = await session.get(Video, video_id)
+                if not video or not video.file_path:
+                    print(f"Video {video_id} not found or has no file path")
+                    return
+
+                video_path = Path(video.file_path)
+                if not video_path.exists():
+                    print(f"Video file not found: {video_path}")
+                    return
+
+                # Check if we have both zh-CN and en subtitles
+                stmt = select(Subtitle).where(Subtitle.video_id == video_id)
+                result = await session.execute(stmt)
+                subtitles = result.scalars().all()
+
+                languages = {sub.language for sub in subtitles}
+                if 'zh-CN' not in languages or 'en' not in languages:
+                    print(f"Missing required subtitles (need zh-CN and en), found: {languages}")
+                    self._task_dao.update_task(task.task_id, {
+                        'status_message': '缺少必需的字幕语言',
+                        'progress': 100
+                    })
+                    return
+
+                # Update progress
+                self._task_dao.update_task(task.task_id, {
+                    'status_message': '生成双语字幕文件...',
+                    'progress': 85
+                })
+
+                # Generate dual subtitle SRT file
+                settings = get_settings()
+                subtitle_dir = settings.subtitle_path / str(video_id)
+                subtitle_dir.mkdir(parents=True, exist_ok=True)
+                subtitle_path = subtitle_dir / f"{video.youtube_id}_dual.srt"
+
+                # Get Chinese and English subtitles
+                zh_subtitle = next((s for s in subtitles if s.language == 'zh-CN'), None)
+                en_subtitle = next((s for s in subtitles if s.language == 'en'), None)
+
+                # Get segments
+                stmt_zh = select(SubtitleSegment).where(
+                    SubtitleSegment.subtitle_id == zh_subtitle.id
+                ).order_by(SubtitleSegment.sequence)
+                result_zh = await session.execute(stmt_zh)
+                zh_segments = result_zh.scalars().all()
+
+                stmt_en = select(SubtitleSegment).where(
+                    SubtitleSegment.subtitle_id == en_subtitle.id
+                ).order_by(SubtitleSegment.sequence)
+                result_en = await session.execute(stmt_en)
+                en_segments = result_en.scalars().all()
+
+                # Generate dual SRT file
+                await self._generate_dual_srt(zh_segments, en_segments, subtitle_path)
+
+                print(f"Generated dual subtitle file: {subtitle_path}")
+
+                # Update progress
+                self._task_dao.update_task(task.task_id, {
+                    'status_message': '嵌入字幕到视频...',
+                    'progress': 90
+                })
+
+                # Embed subtitles into video
+                output_path = video_path.parent / f"{video_path.stem}_with_subs{video_path.suffix}"
+
+                cmd = [
+                    'ffmpeg',
+                    '-i', str(video_path),
+                    '-i', str(subtitle_path),
+                    '-c', 'copy',
+                    '-c:s', 'mov_text',
+                    '-metadata:s:s:0', 'language=chi',
+                    '-metadata:s:s:0', 'title=双语字幕',
+                    '-y',
+                    str(output_path)
+                ]
+
+                print(f"Embedding subtitles with command: {' '.join(cmd)}")
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode != 0:
+                    print(f"FFmpeg failed: {result.stderr}")
+                    self._task_dao.update_task(task.task_id, {
+                        'status_message': 'FFmpeg 嵌入字幕失败',
+                        'progress': 100
+                    })
+                    return
+
+                if output_path.exists():
+                    print(f"Dual subtitle video created: {output_path}")
+                    self._task_dao.update_task(task.task_id, {
+                        'status_message': '双语字幕处理完成',
+                        'progress': 100
+                    })
+                else:
+                    print(f"Output file not created: {output_path}")
+
+        except Exception as e:
+            print(f"Failed to process dual subtitles: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the entire download task
+            self._task_dao.update_task(task.task_id, {
+                'status_message': f'双语字幕处理失败: {str(e)}',
+                'progress': 100
+            })
+
+    async def _generate_dual_srt(
+        self,
+        zh_segments: list,
+        en_segments: list,
+        output_path: Path
+    ) -> None:
+        """Generate dual language SRT file.
+
+        Args:
+            zh_segments: Chinese subtitle segments
+            en_segments: English subtitle segments
+            output_path: Output SRT file path
+        """
+        from datetime import timedelta
+
+        def format_srt_time(seconds: float) -> str:
+            """Convert seconds to SRT time format."""
+            td = timedelta(seconds=seconds)
+            total_seconds = int(td.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            secs = total_seconds % 60
+            millis = int((seconds - int(seconds)) * 1000)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+        # Align subtitles by time
+        dual_segments = []
+        for zh_seg in zh_segments:
+            # Find best matching English segment
+            best_match = None
+            min_time_diff = float('inf')
+
+            for en_seg in en_segments:
+                time_diff = abs(en_seg.start_time - zh_seg.start_time)
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    best_match = en_seg
+
+            dual_segments.append({
+                'start': zh_seg.start_time,
+                'end': zh_seg.end_time,
+                'zh': zh_seg.text.strip(),
+                'en': best_match.text.strip() if best_match else ''
+            })
+
+        # Write SRT file
+        with open(output_path, 'w', encoding='utf-8') as f:
+            for idx, segment in enumerate(dual_segments, start=1):
+                f.write(f"{idx}\n")
+                f.write(f"{format_srt_time(segment['start'])} --> {format_srt_time(segment['end'])}\n")
+                f.write(f"{segment['zh']}\n")
+                if segment['en']:
+                    f.write(f"{segment['en']}\n")
+                f.write("\n")
 
     def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         """Get status of a download task.
@@ -481,6 +913,7 @@ class DownloadManager:
         return {
             'task_id': task_data['task_id'],
             'url': task_data['url'],
+            'title': task_data.get('title') or '未知标题',  # Include title with fallback
             'status': task_data['status'],
             'progress': task_data['progress'],
             'status_message': task_data['status_message'] or '',
@@ -511,6 +944,7 @@ class DownloadManager:
             task_status = {
                 'task_id': task_data['task_id'],
                 'url': task_data['url'],
+                'title': task_data.get('title') or '未知标题',  # Include title with fallback
                 'status': task_data['status'],
                 'progress': task_data['progress'],
                 'status_message': task_data['status_message'] or '',
