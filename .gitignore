@@ -213,7 +213,7 @@ tests/
 frontend/dist
 frontend/node_modules
 frontend/tests
-.idea
+.idea/
 .gitignore
 API_EXAMPLES.md
 CHANGES_SUMMARY.md
