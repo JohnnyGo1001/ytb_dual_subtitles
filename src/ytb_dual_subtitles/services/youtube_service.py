@@ -46,14 +46,18 @@ class YouTubeService:
         for browser in browsers_to_try:
             try:
                 # Test if cookies can be extracted from this browser
+                # We need to create a temporary YoutubeDL instance to test
+                import yt_dlp
                 test_opts = {
-                    'cookiesfromdatabase': browser,
+                    'cookiesfrombrowser': (browser,),
                     'quiet': True,
                     'no_warnings': True,
+                    'extract_flat': True,
                 }
-                # If no exception is raised, we can use this browser
-                # Successfully configured cookies from this browser
-                return {'cookiesfromdatabase': browser}
+                with yt_dlp.YoutubeDL(test_opts) as ydl:
+                    # If no exception is raised, we can use this browser
+                    # Successfully configured cookies from this browser
+                    return {'cookiesfrombrowser': (browser,)}
             except Exception:
                 continue
 
@@ -79,8 +83,7 @@ class YouTubeService:
             },
             'extractor_args': {
                 'youtube': {
-                    'skip': ['hls', 'dash'],
-                    'player_client': ['android', 'web', 'tv_embedded'],
+                    'player_client': ['web'],
                     'player_skip': ['configs'],
                     'comment_sort': ['top'],
                     'max_comments': [0],  # Don't extract comments
@@ -93,7 +96,7 @@ class YouTubeService:
             'no_warnings': True,
         }
 
-        # Add cookies configuration
+        # Add cookies configuration (required for bot detection bypass)
         cookies_config = self._get_cookies_config()
         base_opts.update(cookies_config)
 

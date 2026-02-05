@@ -9,12 +9,14 @@ export interface Video extends BaseEntity {
   duration: number;
   thumbnail_url?: string;
   file_path: string;
-  file_size: number;
-  download_url: string;
-  subtitle_available: boolean;
+  file_size?: number;
+  download_url?: string;
+  subtitle_available?: boolean;
   view_count?: number;
   upload_date?: string;
   channel_name?: string;
+  status?: string;
+  has_subtitles?: boolean;
 }
 
 export interface SubtitleSegment {

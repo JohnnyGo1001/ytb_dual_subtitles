@@ -22,7 +22,11 @@ const VideoCard: React.FC<VideoCardProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = (bytes: number | undefined): string => {
+    if (!bytes || bytes === 0) {
+      return 'Unknown';
+    }
+
     const units = ['B', 'KB', 'MB', 'GB'];
     let size = bytes;
     let unitIndex = 0;
@@ -32,7 +36,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
       unitIndex++;
     }
 
-    return `${size.toFixed(1)}${units[unitIndex]}`;
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
   };
 
   return (

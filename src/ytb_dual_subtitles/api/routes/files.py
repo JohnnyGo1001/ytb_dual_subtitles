@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ytb_dual_subtitles.core.database import get_db
 from ytb_dual_subtitles.core.settings import get_settings
@@ -42,8 +43,8 @@ async def get_videos(
     Returns:
         Dictionary containing videos list and pagination information
     """
-    # Build base query
-    query = select(Video)
+    # Build base query with eager loading of subtitles
+    query = select(Video).options(selectinload(Video.subtitles))
 
     # Apply filters
     conditions = []
@@ -92,12 +93,21 @@ async def get_videos(
     # Format response
     video_list = []
     for video in videos:
+        # Get file size
+        file_size = 0
+        if video.file_path and Path(video.file_path).exists():
+            try:
+                file_size = Path(video.file_path).stat().st_size
+            except Exception:
+                file_size = 0
+
         video_data = {
             "id": video.id,
             "youtube_id": video.youtube_id,
             "title": video.title,
             "duration": video.duration,
             "file_path": video.file_path,
+            "file_size": file_size,
             "status": video.status,
             "created_at": video.created_at.isoformat() if video.created_at else None,
             "updated_at": video.updated_at.isoformat() if video.updated_at else None,
