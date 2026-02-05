@@ -132,16 +132,19 @@ class Settings(BaseSettings):
     def get_yt_dlp_opts(self) -> dict[str, any]:
         """Get yt-dlp configuration options."""
         return {
-            'format': 'best[height<=1080]',  # Max 1080p for reasonable file sizes
+            # Don't specify format - let yt-dlp choose the best video+audio and merge
+            # This is the recommended approach according to yt-dlp documentation
             'outtmpl': str(self.download_path / '%(title)s.%(ext)s'),
             'writesubtitles': True,
             'writeautomaticsub': True,
-            'subtitleslangs': ['en', 'zh-CN', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'de'],
+            'subtitleslangs': ['en', 'zh-Hans', 'zh-Hant', 'zh-CN', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'de'],
+            'subtitlesformat': 'vtt',  # Use VTT format for subtitles
             'ignoreerrors': True,
             'no_warnings': not self.debug,
             'extractaudio': False,
             'audioformat': 'mp3',
             'embed_subs': False,  # We handle subtitles separately
+            'merge_output_format': 'mp4',  # Ensure merged output is MP4
         }
 
 

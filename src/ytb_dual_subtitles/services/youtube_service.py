@@ -83,8 +83,10 @@ class YouTubeService:
             },
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['web'],
-                    'player_skip': ['configs'],
+                    # Use android client first, fallback to web with cookies
+                    # android client bypasses signature requirements but doesn't support cookies
+                    # web client supports cookies but requires signature solving
+                    'player_client': ['android', 'web'],
                     'comment_sort': ['top'],
                     'max_comments': [0],  # Don't extract comments
                 }
@@ -96,7 +98,8 @@ class YouTubeService:
             'no_warnings': True,
         }
 
-        # Add cookies configuration (required for bot detection bypass)
+        # Add cookies configuration for web client fallback
+        # Android client will skip cookies, web client will use them
         cookies_config = self._get_cookies_config()
         base_opts.update(cookies_config)
 
@@ -366,20 +369,39 @@ class YouTubeService:
             filename = self.generate_filename_from_url(url)
             output_file = str(settings.download_path / filename)
 
+        # For yt-dlp to correctly name subtitle files, we need to provide
+        # the output template without extension, so it can add .en.vtt, .zh-CN.vtt, etc.
+        from pathlib import Path
+        output_path_obj = Path(output_file)
+        output_template = str(output_path_obj.parent / output_path_obj.stem)
+
+        # Configure yt-dlp options from settings
+        yt_dlp_opts = settings.get_yt_dlp_opts()
+
         # Configure yt-dlp options
         ydl_opts = self._get_base_ydl_opts()
         ydl_opts.update({
-            'format': 'best[height<=1080]/best[height<=720]/best',
-            'outtmpl': output_file,
+            # Don't specify format by default - let yt-dlp automatically download and merge best video+audio
+            # Only use custom format if explicitly provided in settings
+            'outtmpl': output_template,  # Without extension for proper subtitle naming
             'noplaylist': True,
             'extract_flat': False,
             'writeinfojson': False,
-            'writesubtitles': False,
+            'writesubtitles': yt_dlp_opts.get('writesubtitles', True),
+            'writeautomaticsub': yt_dlp_opts.get('writeautomaticsub', True),
+            'subtitleslangs': yt_dlp_opts.get('subtitleslangs', ['en', 'zh-CN', 'zh-Hans']),
+            'subtitlesformat': yt_dlp_opts.get('subtitlesformat', 'vtt'),
+            'convert_subs': 'vtt',  # Ensure subtitles are converted to VTT format
+            'merge_output_format': 'mp4',  # Merge to MP4 format
             # Try to use age-gated bypass
             'age_limit': 99,
             # Force IPv4 to avoid some network issues
             'force_ipv4': True,
         })
+
+        # Only add format if explicitly specified in settings
+        if 'format' in yt_dlp_opts and yt_dlp_opts['format']:
+            ydl_opts['format'] = yt_dlp_opts['format']
 
         try:
             # Use asyncio to run yt-dlp in a thread pool to avoid blocking
@@ -388,6 +410,15 @@ class YouTubeService:
             def download_sync():
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
+
+                # Find the actual downloaded file (yt-dlp adds extension automatically)
+                # Try common video extensions
+                for ext in ['.mp4', '.webm', '.mkv', '.m4a']:
+                    candidate = output_template + ext
+                    if Path(candidate).exists():
+                        return candidate
+
+                # Fallback to original output_file if nothing found
                 return output_file
 
             # Run in executor to prevent blocking
