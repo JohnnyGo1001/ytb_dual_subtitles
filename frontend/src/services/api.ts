@@ -21,14 +21,20 @@ export class ApiService {
     const url = `${this.baseURL}${endpoint}`;
 
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
           ...options.headers,
         },
         ...options,
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
 
       // 如果HTTP状态码不是200系列，但返回了JSON，说明是业务错误
@@ -58,6 +64,15 @@ export class ApiService {
       };
 
     } catch (error) {
+      // Handle abort/timeout
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          success: false,
+          error_code: 'TIMEOUT_ERROR',
+          error_msg: '请求超时，请检查后端服务是否正常运行'
+        };
+      }
+
       return {
         success: false,
         error_code: 'NETWORK_ERROR',

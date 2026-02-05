@@ -14,6 +14,7 @@ function DownloadPage() {
   const [activeTasks, setActiveTasks] = useState<DownloadTask[]>([]);
   const [recentTasks, setRecentTasks] = useState<DownloadTask[]>([]);
   const [isConnected, setIsConnected] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track if this is the first load
 
   // API hooks
   const {
@@ -26,7 +27,7 @@ function DownloadPage() {
     execute: fetchActiveDownloads,
   } = useApi();
 
-  // Load active downloads from API (只更新现有任务状态)
+  // Load active downloads from API
   const loadActiveDownloads = useCallback(async () => {
     try {
       const response = await fetchActiveDownloads(async () => {
@@ -65,15 +66,34 @@ function DownloadPage() {
         );
 
         setActiveTasks(prevTasks => {
-          // 创建一个Map来快速查找现有任务
+          // On initial load, always use server data
+          if (isInitialLoad) {
+            setIsInitialLoad(false);
+            // Map all active tasks from server
+            return activeTasks.map(apiTask => ({
+              id: apiTask.task_id,
+              title: apiTask.title || '正在获取视频信息...',
+              url: apiTask.url,
+              status: apiTask.status,
+              progress: apiTask.progress || 0,
+              downloadedSize: apiTask.downloaded_bytes,
+              speed: apiTask.download_speed,
+              estimatedTimeRemaining: apiTask.eta_seconds,
+              error: apiTask.error_message,
+              createdAt: apiTask.created_at,
+              updatedAt: apiTask.last_updated,
+            }));
+          }
+
+          // After initial load, merge with existing tasks
           const existingTasksMap = new Map(prevTasks.map(task => [task.id, task]));
 
-          // 处理API返回的活动任务
+          // Update existing tasks and add new ones from server
           const updatedTasks = activeTasks.map(apiTask => {
             const existingTask = existingTasksMap.get(apiTask.task_id);
 
             if (existingTask) {
-              // 更新现有任务的状态
+              // Update existing task
               return {
                 ...existingTask,
                 title: apiTask.title || existingTask.title || '正在获取视频信息...',
@@ -85,7 +105,7 @@ function DownloadPage() {
                 error: apiTask.error_message,
               };
             } else {
-              // 创建新任务（只有在页面刷新后才会发生）
+              // New task from server
               return {
                 id: apiTask.task_id,
                 title: apiTask.title || '正在获取视频信息...',
@@ -111,7 +131,7 @@ function DownloadPage() {
       console.error('Failed to load active downloads:', error);
       setIsConnected(false);
     }
-  }, [fetchActiveDownloads]);
+  }, [fetchActiveDownloads, isInitialLoad]);
 
   // Load recent downloads
   const loadRecentDownloads = useCallback(async () => {
@@ -122,11 +142,18 @@ function DownloadPage() {
 
       console.log('最近下载API响应:', response); // 调试日志
 
-      // 处理直接数组格式的响应
+      // If response is null, it means the API call failed
+      if (response === null) {
+        console.warn('API call returned null');
+        setRecentTasks([]);
+        return;
+      }
+
+      // useApi.execute returns the unwrapped data, so it should be an array
       if (Array.isArray(response)) {
         console.log('直接数组响应，包含', response.length, '个任务');
 
-        // 先查看已完成任务的完整结构
+        // 过滤已完成的任务
         const completedApiTasks = response.filter(task => task.status === 'completed');
         console.log('已完成的API任务原始数据:', completedApiTasks);
 
@@ -136,7 +163,7 @@ function DownloadPage() {
           console.log('第一个已完成任务的完整内容:', completedApiTasks[0]);
         }
 
-        // 尝试不同的标题字段名称
+        // 映射为前端格式
         const completedTasks = completedApiTasks.map(apiTask => ({
           id: apiTask.task_id,
           title: apiTask.title || apiTask.video_title || apiTask.name || apiTask.video_name || apiTask.filename || '未知标题',
@@ -144,24 +171,18 @@ function DownloadPage() {
           status: apiTask.status,
           progress: apiTask.progress || 0,
           createdAt: apiTask.created_at || new Date().toISOString(),
-          updatedAt: apiTask.updated_at || new Date().toISOString(),
+          updatedAt: apiTask.updated_at || apiTask.last_updated || new Date().toISOString(),
         } as DownloadTask));
 
         console.log('映射后的已完成任务:', completedTasks);
         setRecentTasks(completedTasks);
-      }
-      // 处理包含success字段的对象格式响应
-      else if (response && typeof response === 'object' && 'success' in response) {
-        const apiResponse = response as any;
-        console.log('对象格式响应:', apiResponse);
-        if (apiResponse.success && apiResponse.data) {
-          setRecentTasks(apiResponse.data.items || []);
-        }
       } else {
-        console.log('未识别的响应格式:', response);
+        console.warn('未识别的响应格式:', response);
+        setRecentTasks([]);
       }
     } catch (error) {
       console.error('Failed to load recent downloads:', error);
+      setRecentTasks([]);
     }
   }, [fetchRecentDownloads]);
 
@@ -182,10 +203,10 @@ function DownloadPage() {
       task.status === 'processing'
     ).length;
 
-    // Only poll if there are truly active tasks
-    if (activeCount > 0) {
+    // Poll if there are active tasks OR if we just loaded the page (to check for background tasks)
+    if (activeCount > 0 || isInitialLoad) {
       intervalId = setInterval(() => {
-        loadActiveDownloads(); // 恢复轮询以更新任务进度
+        loadActiveDownloads();
       }, 2000); // Poll every 2 seconds
     }
 
@@ -194,7 +215,7 @@ function DownloadPage() {
         clearInterval(intervalId);
       }
     };
-  }, [activeTasks, loadActiveDownloads]);
+  }, [activeTasks, loadActiveDownloads, isInitialLoad]);
 
   // Keep error/failed tasks visible until user manually dismisses them
   // (Removed automatic cleanup to allow users to see error details)
@@ -202,12 +223,15 @@ function DownloadPage() {
   // Handle download start
   const handleDownloadStart = useCallback((task: DownloadTask) => {
     console.log('handleDownloadStart called with task:', task);
-    showToast('下载任务已创建', 'success');
+    showToast('下载任务已创建，正在后台下载', 'success');
 
-    // 直接添加新任务到activeTasks状态
+    // Mark that we're no longer in initial load state
+    setIsInitialLoad(false);
+
+    // Add new task to active tasks immediately for instant feedback
     setActiveTasks(prev => [...prev, task]);
 
-    // 启动API调用来更新任务状态（现在只会更新现有任务，不会添加旧任务）
+    // Refresh from server to get accurate status
     setTimeout(() => {
       loadActiveDownloads();
     }, 500);
@@ -232,18 +256,28 @@ function DownloadPage() {
     }
   }, [navigate]);
 
-  // Show error toast if recent downloads failed to load
-  useEffect(() => {
-    if (recentError) {
-      showToast('加载最近下载失败', 'error');
-    }
-  }, [recentError, showToast]);
+  // Error is now shown inline, no need for toast
 
   return (
     <div className={styles.container}>
       {!isConnected && (
         <div className={styles.connectionWarning}>
           ⚠️ 实时进度更新已断开，请检查服务器连接
+        </div>
+      )}
+
+      {activeTasks.length > 0 && (
+        <div className={styles.infoBar}>
+          <span className={styles.infoText}>
+            📥 {activeTasks.length} 个任务正在后台下载，自动每2秒更新进度
+          </span>
+          <button
+            onClick={() => loadActiveDownloads()}
+            className={styles.refreshButton}
+            title="立即刷新进度"
+          >
+            🔄 刷新
+          </button>
         </div>
       )}
 
@@ -254,7 +288,10 @@ function DownloadPage() {
       {/* Active downloads */}
       {activeTasks.length > 0 && (
         <div className={styles.activeSection}>
-          <h2 className={styles.sectionTitle}>当前下载</h2>
+          <h2 className={styles.sectionTitle}>
+            当前下载
+            <span className={styles.asyncHint}>（任务在后台异步执行，页面刷新后仍会继续）</span>
+          </h2>
           <div className={styles.activeTasksList}>
             {activeTasks.map((task, index) => (
               <div key={`task-${task.id}-${index}`} className={styles.activeTask}>
@@ -285,6 +322,17 @@ function DownloadPage() {
       )}
 
       <div className={styles.recentSection}>
+        {recentError && (
+          <div className={styles.errorMessage}>
+            ⚠️ 加载最近下载失败：{recentError}
+            <button
+              onClick={() => loadRecentDownloads()}
+              className={styles.retryButton}
+            >
+              重试
+            </button>
+          </div>
+        )}
         <RecentVideos
           tasks={recentTasks}
           loading={isLoadingRecent}

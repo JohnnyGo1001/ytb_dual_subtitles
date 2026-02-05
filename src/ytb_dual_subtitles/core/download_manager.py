@@ -301,8 +301,8 @@ class DownloadManager:
 
         Complete workflow:
         1. Download video (0-60% progress)
-        2. Process and import subtitles (60-80% progress)
-        3. Generate and embed dual subtitles (80-100% progress)
+        2. Process and import subtitles (60-100% progress)
+        Note: Dual subtitle burning is disabled
 
         Args:
             task: Download task to execute
@@ -422,14 +422,9 @@ class DownloadManager:
             video_id = await self._create_video_record(task)
 
             if video_id:
-                # Step 3: Generate and embed dual subtitles (80-100% progress)
-                self._task_dao.update_task(task.task_id, {
-                    'status_message': '生成双语字幕中...',
-                    'progress': 80
-                })
-
-                # Process dual subtitles
-                await self._process_dual_subtitles(video_id, task)
+                # Dual subtitle burning is disabled
+                # Just mark as completed
+                pass
 
             task.status = DownloadTaskStatus.COMPLETED
             task.progress = 100
@@ -707,194 +702,6 @@ class DownloadManager:
             return minutes * 60 + seconds
         else:  # SS.mmm
             return float(parts[0])
-
-    async def _process_dual_subtitles(self, video_id: int, task: DownloadTask) -> None:
-        """Generate and embed dual subtitles into video.
-
-        Args:
-            video_id: Database ID of the video
-            task: Download task for progress tracking
-        """
-        try:
-            import subprocess
-            from pathlib import Path
-            from datetime import timedelta
-            from sqlalchemy import select
-            from ytb_dual_subtitles.core.database import get_db_session
-            from ytb_dual_subtitles.models.video import Video, Subtitle, SubtitleSegment
-
-            print(f"Processing dual subtitles for video ID: {video_id}")
-
-            # Get video record
-            async with get_db_session() as session:
-                video = await session.get(Video, video_id)
-                if not video or not video.file_path:
-                    print(f"Video {video_id} not found or has no file path")
-                    return
-
-                video_path = Path(video.file_path)
-                if not video_path.exists():
-                    print(f"Video file not found: {video_path}")
-                    return
-
-                # Check if we have both zh-CN and en subtitles
-                stmt = select(Subtitle).where(Subtitle.video_id == video_id)
-                result = await session.execute(stmt)
-                subtitles = result.scalars().all()
-
-                languages = {sub.language for sub in subtitles}
-                if 'zh-CN' not in languages or 'en' not in languages:
-                    print(f"Missing required subtitles (need zh-CN and en), found: {languages}")
-                    self._task_dao.update_task(task.task_id, {
-                        'status_message': '缺少必需的字幕语言',
-                        'progress': 100
-                    })
-                    return
-
-                # Update progress
-                self._task_dao.update_task(task.task_id, {
-                    'status_message': '生成双语字幕文件...',
-                    'progress': 85
-                })
-
-                # Generate dual subtitle SRT file
-                settings = get_settings()
-                subtitle_dir = settings.subtitle_path / str(video_id)
-                subtitle_dir.mkdir(parents=True, exist_ok=True)
-                subtitle_path = subtitle_dir / f"{video.youtube_id}_dual.srt"
-
-                # Get Chinese and English subtitles
-                zh_subtitle = next((s for s in subtitles if s.language == 'zh-CN'), None)
-                en_subtitle = next((s for s in subtitles if s.language == 'en'), None)
-
-                # Get segments
-                stmt_zh = select(SubtitleSegment).where(
-                    SubtitleSegment.subtitle_id == zh_subtitle.id
-                ).order_by(SubtitleSegment.sequence)
-                result_zh = await session.execute(stmt_zh)
-                zh_segments = result_zh.scalars().all()
-
-                stmt_en = select(SubtitleSegment).where(
-                    SubtitleSegment.subtitle_id == en_subtitle.id
-                ).order_by(SubtitleSegment.sequence)
-                result_en = await session.execute(stmt_en)
-                en_segments = result_en.scalars().all()
-
-                # Generate dual SRT file
-                await self._generate_dual_srt(zh_segments, en_segments, subtitle_path)
-
-                print(f"Generated dual subtitle file: {subtitle_path}")
-
-                # Update progress
-                self._task_dao.update_task(task.task_id, {
-                    'status_message': '嵌入字幕到视频...',
-                    'progress': 90
-                })
-
-                # Embed subtitles into video
-                output_path = video_path.parent / f"{video_path.stem}_with_subs{video_path.suffix}"
-
-                cmd = [
-                    'ffmpeg',
-                    '-i', str(video_path),
-                    '-i', str(subtitle_path),
-                    '-c', 'copy',
-                    '-c:s', 'mov_text',
-                    '-metadata:s:s:0', 'language=chi',
-                    '-metadata:s:s:0', 'title=双语字幕',
-                    '-y',
-                    str(output_path)
-                ]
-
-                print(f"Embedding subtitles with command: {' '.join(cmd)}")
-
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True
-                )
-
-                if result.returncode != 0:
-                    print(f"FFmpeg failed: {result.stderr}")
-                    self._task_dao.update_task(task.task_id, {
-                        'status_message': 'FFmpeg 嵌入字幕失败',
-                        'progress': 100
-                    })
-                    return
-
-                if output_path.exists():
-                    print(f"Dual subtitle video created: {output_path}")
-                    self._task_dao.update_task(task.task_id, {
-                        'status_message': '双语字幕处理完成',
-                        'progress': 100
-                    })
-                else:
-                    print(f"Output file not created: {output_path}")
-
-        except Exception as e:
-            print(f"Failed to process dual subtitles: {e}")
-            import traceback
-            traceback.print_exc()
-            # Don't fail the entire download task
-            self._task_dao.update_task(task.task_id, {
-                'status_message': f'双语字幕处理失败: {str(e)}',
-                'progress': 100
-            })
-
-    async def _generate_dual_srt(
-        self,
-        zh_segments: list,
-        en_segments: list,
-        output_path: Path
-    ) -> None:
-        """Generate dual language SRT file.
-
-        Args:
-            zh_segments: Chinese subtitle segments
-            en_segments: English subtitle segments
-            output_path: Output SRT file path
-        """
-        from datetime import timedelta
-
-        def format_srt_time(seconds: float) -> str:
-            """Convert seconds to SRT time format."""
-            td = timedelta(seconds=seconds)
-            total_seconds = int(td.total_seconds())
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            secs = total_seconds % 60
-            millis = int((seconds - int(seconds)) * 1000)
-            return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-
-        # Align subtitles by time
-        dual_segments = []
-        for zh_seg in zh_segments:
-            # Find best matching English segment
-            best_match = None
-            min_time_diff = float('inf')
-
-            for en_seg in en_segments:
-                time_diff = abs(en_seg.start_time - zh_seg.start_time)
-                if time_diff < min_time_diff:
-                    min_time_diff = time_diff
-                    best_match = en_seg
-
-            dual_segments.append({
-                'start': zh_seg.start_time,
-                'end': zh_seg.end_time,
-                'zh': zh_seg.text.strip(),
-                'en': best_match.text.strip() if best_match else ''
-            })
-
-        # Write SRT file
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for idx, segment in enumerate(dual_segments, start=1):
-                f.write(f"{idx}\n")
-                f.write(f"{format_srt_time(segment['start'])} --> {format_srt_time(segment['end'])}\n")
-                f.write(f"{segment['zh']}\n")
-                if segment['en']:
-                    f.write(f"{segment['en']}\n")
-                f.write("\n")
 
     def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         """Get status of a download task.
