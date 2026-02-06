@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 
 from ytb_dual_subtitles.core.download_manager import DownloadManager
@@ -169,17 +169,26 @@ async def get_download_task_status(
 
 @router.get("/list/downloads", response_model=ApiResponse[list[dict[str, Any]]])
 async def list_download_tasks(
+    limit: int = Query(2, ge=1, le=100, description="Maximum number of tasks to return"),
     download_manager: DownloadManager = Depends(get_download_manager)
 ) -> ApiResponse[list[dict[str, Any]]]:
-    """List all download tasks.
+    """List recent download tasks, sorted by creation time (newest first).
 
     Args:
+        limit: Maximum number of tasks to return (default: 2)
         download_manager: Download manager instance
 
     Returns:
-        Unified API response with list of all tasks
+        Unified API response with list of recent tasks, including download times
     """
     tasks = download_manager.list_tasks()
+
+    # Sort by created_at in descending order (newest first)
+    tasks.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+
+    # Limit to specified number of tasks
+    tasks = tasks[:limit]
+
     return ApiResponse.success_response(data=tasks)
 
 

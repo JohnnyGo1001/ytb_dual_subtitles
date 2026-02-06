@@ -7,6 +7,7 @@ Subtask 1.2: 实现视频信息获取 (get_video_info)
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from collections.abc import Callable
 from typing import Any
@@ -15,6 +16,8 @@ from urllib.parse import parse_qs, urlparse
 import yt_dlp
 
 from ytb_dual_subtitles.exceptions.download_errors import VideoNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 class YouTubeService:
@@ -40,15 +43,18 @@ class YouTubeService:
         """Get cookies configuration, trying multiple browsers if needed.
 
         Returns:
-            Dictionary with cookies configuration
+            Dictionary with cookies configuration. Returns empty dict if all attempts fail.
         """
+        logger.info("Attempting to extract cookies from browser for YouTube authentication...")
+
         # If browser profile is specified, use it directly
         if self.browser_profile:
             # Format: browser:profile (e.g., "chrome:Default")
             browser_spec = (self.browser_for_cookies, self.browser_profile)
+            logger.info(f"Trying to extract cookies from {self.browser_for_cookies} with profile '{self.browser_profile}'...")
+
             try:
                 # Test if cookies can be extracted with this profile
-                import yt_dlp
                 test_opts = {
                     'cookiesfrombrowser': browser_spec,
                     'quiet': True,
@@ -57,17 +63,23 @@ class YouTubeService:
                 }
                 with yt_dlp.YoutubeDL(test_opts) as ydl:
                     # If no exception is raised, we can use this browser profile
+                    logger.info(f"✅ Successfully loaded cookies from {self.browser_for_cookies}:{self.browser_profile}")
                     return {'cookiesfrombrowser': browser_spec}
             except Exception as e:
-                print(f"Warning: Failed to load cookies from {self.browser_for_cookies}:{self.browser_profile}: {e}")
+                logger.warning(f"Failed to load cookies from {self.browser_for_cookies}:{self.browser_profile}: {type(e).__name__}: {str(e)}")
 
         # Try different browsers in order of preference (without profile)
         browsers_to_try = [self.browser_for_cookies, 'chrome', 'firefox', 'safari', 'edge']
+        # Remove duplicates while preserving order
+        seen = set()
+        browsers_to_try = [x for x in browsers_to_try if not (x in seen or seen.add(x))]
+
+        logger.info(f"Trying to extract cookies from browsers: {', '.join(browsers_to_try)}")
 
         for browser in browsers_to_try:
             try:
+                logger.debug(f"  Attempting to extract cookies from {browser}...")
                 # Test if cookies can be extracted from this browser
-                import yt_dlp
                 test_opts = {
                     'cookiesfrombrowser': (browser,),
                     'quiet': True,
@@ -76,12 +88,27 @@ class YouTubeService:
                 }
                 with yt_dlp.YoutubeDL(test_opts) as ydl:
                     # If no exception is raised, we can use this browser
+                    logger.info(f"✅ Successfully loaded cookies from {browser}")
                     return {'cookiesfrombrowser': (browser,)}
-            except Exception:
+            except Exception as e:
+                logger.debug(f"  ❌ Failed to extract cookies from {browser}: {type(e).__name__}: {str(e)}")
                 continue
 
         # Fallback: no cookies available
-        print("Warning: Could not extract cookies from any browser")
+        logger.error("=" * 80)
+        logger.error("❌ CRITICAL: Could not extract cookies from any browser!")
+        logger.error("=" * 80)
+        logger.error("This may cause subtitle downloads to fail due to YouTube's anti-bot protection.")
+        logger.error("Tried browsers: %s", ', '.join(browsers_to_try))
+        logger.error("")
+        logger.error("To fix this issue:")
+        logger.error("1. Ensure at least one of these browsers is installed: Chrome, Firefox, Safari, Edge")
+        logger.error("2. Log in to YouTube in your browser")
+        logger.error("3. Close and restart the browser to ensure cookies are saved")
+        logger.error("4. If using Chrome, check your profile name at chrome://version/")
+        logger.error("   and update YTB_BROWSER_PROFILE in .env if needed")
+        logger.error("=" * 80)
+
         return {}
 
     def _get_base_ydl_opts(self) -> dict[str, Any]:
@@ -103,10 +130,10 @@ class YouTubeService:
             },
             'extractor_args': {
                 'youtube': {
-                    # Use android client first, fallback to web with cookies
-                    # android client bypasses signature requirements but doesn't support cookies
-                    # web client supports cookies but requires signature solving
-                    'player_client': ['android', 'web'],
+                    # Use web client with cookies for subtitle download
+                    # Web client fully supports cookies and subtitles
+                    # Note: android client doesn't support cookies and may skip subtitles
+                    'player_client': ['web'],
                     'comment_sort': ['top'],
                     'max_comments': [0],  # Don't extract comments
                 }
@@ -400,6 +427,13 @@ class YouTubeService:
 
         # Configure yt-dlp options
         ydl_opts = self._get_base_ydl_opts()
+
+        # Log cookie configuration status
+        if 'cookiesfrombrowser' in ydl_opts:
+            logger.info(f"✅ Cookie配置已加载: {ydl_opts['cookiesfrombrowser']}")
+        else:
+            logger.warning("⚠️ 没有cookie配置！字幕下载可能会失败")
+
         ydl_opts.update({
             # Use a flexible format selection that falls back gracefully
             # This selects best video+audio, but will work even if some formats are unavailable
@@ -426,6 +460,11 @@ class YouTubeService:
         # Allow settings to override format if explicitly specified
         if 'format' in yt_dlp_opts and yt_dlp_opts['format']:
             ydl_opts['format'] = yt_dlp_opts['format']
+
+        # Log subtitle configuration
+        logger.info(f"字幕下载配置: writesubtitles={ydl_opts.get('writesubtitles')}, "
+                   f"writeautomaticsub={ydl_opts.get('writeautomaticsub')}, "
+                   f"subtitleslangs={ydl_opts.get('subtitleslangs')}")
 
         try:
             # Use asyncio to run yt-dlp in a thread pool to avoid blocking
@@ -456,6 +495,43 @@ class YouTubeService:
 
                     # Proceed with download
                     ydl.download([url])
+
+                    # FORCE subtitle download if not downloaded
+                    from pathlib import Path
+                    base_path = Path(output_template).parent
+                    base_name = Path(output_template).stem
+                    subtitle_files = list(base_path.glob(f"{base_name}.*.vtt"))
+
+                    if not subtitle_files:
+                        logger.warning("⚠️ 字幕文件未下载，强制重新下载字幕...")
+
+                        # Force subtitle-only download
+                        subtitle_opts = {
+                            'skip_download': True,
+                            'writesubtitles': True,
+                            'writeautomaticsub': True,
+                            'subtitleslangs': ['en', 'zh-CN', 'zh-Hans'],
+                            'subtitlesformat': 'vtt',
+                            'convert_subs': 'vtt',
+                            'outtmpl': output_template,
+                            'cookiesfrombrowser': ydl_opts.get('cookiesfrombrowser'),
+                            'quiet': False,
+                        }
+
+                        try:
+                            with yt_dlp.YoutubeDL(subtitle_opts) as sub_ydl:
+                                sub_ydl.download([url])
+
+                            # Verify subtitles were downloaded
+                            subtitle_files = list(base_path.glob(f"{base_name}.*.vtt"))
+                            if subtitle_files:
+                                logger.info(f"✅ 强制下载字幕成功: {[f.name for f in subtitle_files]}")
+                            else:
+                                logger.error("❌ 强制下载字幕也失败了")
+                        except Exception as e:
+                            logger.error(f"❌ 强制下载字幕失败: {e}")
+                    else:
+                        logger.info(f"✅ 字幕已下载: {[f.name for f in subtitle_files]}")
 
                 # Find the actual downloaded file (yt-dlp adds extension automatically)
                 # Try common video extensions

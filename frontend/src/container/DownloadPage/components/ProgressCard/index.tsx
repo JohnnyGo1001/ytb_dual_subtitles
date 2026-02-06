@@ -1,6 +1,7 @@
 import React from 'react';
 import Button from '@/components/Button';
 import type { DownloadTask } from '@/types/api';
+import { formatDateTime } from '@/utils/formatters';
 import styles from './index.module.css';
 
 export interface ProgressCardProps {
@@ -126,6 +127,12 @@ export const ProgressCard: React.FC<ProgressCardProps> = ({ task, onCancel }) =>
           {task.status === 'downloading' && task.estimatedTimeRemaining && (
             <span className={styles.eta}>
               {formatTime(task.estimatedTimeRemaining)}
+            </span>
+          )}
+
+          {task.createdAt && (
+            <span className={styles.timestamp}>
+              {formatDateTime(task.createdAt)}
             </span>
           )}
         </div>

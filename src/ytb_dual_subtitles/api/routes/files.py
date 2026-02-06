@@ -82,7 +82,7 @@ async def get_videos(
         query.subquery()
     )
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
 
     # Apply pagination
     offset = (page - 1) * per_page
@@ -93,7 +93,7 @@ async def get_videos(
     videos = result.scalars().all()
 
     # Calculate pagination info
-    total_pages = (total + per_page - 1) // per_page
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 0
 
     # Format response
     video_list = []

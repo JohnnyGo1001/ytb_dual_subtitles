@@ -381,10 +381,20 @@ class DownloadManager:
 
                                 if subtitle_count > 0:
                                     subtitles_imported = True
-                                    print(f"✓ Subtitles imported successfully: {subtitle_count} subtitle tracks")
+                                    print(f"✅ Subtitles imported successfully: {subtitle_count} subtitle tracks")
                                 else:
-                                    # No subtitles found - this might be acceptable for some videos
-                                    print(f"⚠ Warning: No subtitles found/imported for video {video_db_id}")
+                                    # No subtitles found - this might indicate cookie/authentication issues
+                                    print("=" * 80)
+                                    print(f"⚠️  WARNING: No subtitles found/imported for video {video_db_id}")
+                                    print("=" * 80)
+                                    print("Possible causes:")
+                                    print("1. The video may not have subtitles available")
+                                    print("2. Cookie authentication may have failed (check logs above)")
+                                    print("3. YouTube's anti-bot protection may be blocking subtitle downloads")
+                                    print("")
+                                    print("The video file was downloaded successfully, but subtitle functionality")
+                                    print("will not be available. Consider checking browser login status.")
+                                    print("=" * 80)
                                     # We'll consider this a success but log the warning
                                     subtitles_imported = True
                         else:
