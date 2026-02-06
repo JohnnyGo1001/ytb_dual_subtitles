@@ -7,6 +7,7 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from ytb_dual_subtitles.core.settings import get_settings
 from ytb_dual_subtitles.exceptions.config_errors import ConfigError, ConfigValidationError
 
 
@@ -84,32 +85,34 @@ class ConfigManager:
             raise ConfigError(f"Failed to create API config template: {e}") from e
 
     def _create_system_config_template(self) -> None:
-        """创建系统配置模板文件."""
+        """创建系统配置模板文件，从 Settings 读取默认值."""
+        settings = get_settings()
+
         template_config = {
             'download': {
-                'path': '~/ytb/videos/',
-                'max_concurrent': 3,
+                'path': str(settings.download_path),
+                'max_concurrent': settings.max_concurrent_downloads,
                 'quality': '1080p',
-                'format': 'mp4'
+                'format': settings.yt_dlp_merge_output_format
             },
             'subtitles': {
-                'default_languages': ['en', 'zh-CN'],
+                'default_languages': settings.yt_dlp_subtitle_languages.split(','),
                 'sync_tolerance': 0.1,
                 'cache_enabled': True,
                 'cache_ttl_days': 7
             },
             'server': {
-                'host': '127.0.0.1',
-                'port': 8000,
-                'debug': False
+                'host': settings.host,
+                'port': settings.port,
+                'debug': settings.debug
             },
             'logging': {
-                'level': 'INFO',
+                'level': settings.log_level,
                 'file_enabled': True,
-                'file_path': '~/ytb/logs/app.log'
+                'file_path': str(settings.data_path / 'logs' / 'app.log')
             },
             'version': '1.0',
-            'last_updated': '2026-02-03'
+            'last_updated': '2026-02-06'
         }
 
         try:

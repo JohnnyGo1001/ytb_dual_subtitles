@@ -20,11 +20,12 @@ from ytb_dual_subtitles.exceptions.download_errors import VideoNotFoundError
 class YouTubeService:
     """Service for YouTube video operations."""
 
-    def __init__(self, browser_for_cookies: str = "chrome") -> None:
+    def __init__(self, browser_for_cookies: str = "chrome", browser_profile: str | None = None) -> None:
         """Initialize YouTube service.
 
         Args:
             browser_for_cookies: Browser to extract cookies from (chrome, firefox, safari, edge)
+            browser_profile: Browser profile name (e.g., 'Default', 'Profile 1'). If None, uses default profile.
         """
         # YouTube URL patterns
         self._youtube_patterns = [
@@ -33,6 +34,7 @@ class YouTubeService:
         ]
 
         self.browser_for_cookies = browser_for_cookies
+        self.browser_profile = browser_profile
 
     def _get_cookies_config(self) -> dict[str, Any]:
         """Get cookies configuration, trying multiple browsers if needed.
@@ -40,13 +42,31 @@ class YouTubeService:
         Returns:
             Dictionary with cookies configuration
         """
-        # Try different browsers in order of preference
+        # If browser profile is specified, use it directly
+        if self.browser_profile:
+            # Format: browser:profile (e.g., "chrome:Default")
+            browser_spec = (self.browser_for_cookies, self.browser_profile)
+            try:
+                # Test if cookies can be extracted with this profile
+                import yt_dlp
+                test_opts = {
+                    'cookiesfrombrowser': browser_spec,
+                    'quiet': True,
+                    'no_warnings': True,
+                    'extract_flat': True,
+                }
+                with yt_dlp.YoutubeDL(test_opts) as ydl:
+                    # If no exception is raised, we can use this browser profile
+                    return {'cookiesfrombrowser': browser_spec}
+            except Exception as e:
+                print(f"Warning: Failed to load cookies from {self.browser_for_cookies}:{self.browser_profile}: {e}")
+
+        # Try different browsers in order of preference (without profile)
         browsers_to_try = [self.browser_for_cookies, 'chrome', 'firefox', 'safari', 'edge']
 
         for browser in browsers_to_try:
             try:
                 # Test if cookies can be extracted from this browser
-                # We need to create a temporary YoutubeDL instance to test
                 import yt_dlp
                 test_opts = {
                     'cookiesfrombrowser': (browser,),
@@ -56,12 +76,12 @@ class YouTubeService:
                 }
                 with yt_dlp.YoutubeDL(test_opts) as ydl:
                     # If no exception is raised, we can use this browser
-                    # Successfully configured cookies from this browser
                     return {'cookiesfrombrowser': (browser,)}
             except Exception:
                 continue
 
         # Fallback: no cookies available
+        print("Warning: Could not extract cookies from any browser")
         return {}
 
     def _get_base_ydl_opts(self) -> dict[str, Any]:
@@ -381,8 +401,10 @@ class YouTubeService:
         # Configure yt-dlp options
         ydl_opts = self._get_base_ydl_opts()
         ydl_opts.update({
-            # Don't specify format by default - let yt-dlp automatically download and merge best video+audio
-            # Only use custom format if explicitly provided in settings
+            # Use a flexible format selection that falls back gracefully
+            # This selects best video+audio, but will work even if some formats are unavailable
+            # Only select actual video formats, not images/storyboards
+            'format': '(bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best)[vcodec!=none]',
             'outtmpl': output_template,  # Without extension for proper subtitle naming
             'noplaylist': True,
             'extract_flat': False,
@@ -397,9 +419,11 @@ class YouTubeService:
             'age_limit': 99,
             # Force IPv4 to avoid some network issues
             'force_ipv4': True,
+            # Add verbose error messages for debugging
+            'verbose': False,
         })
 
-        # Only add format if explicitly specified in settings
+        # Allow settings to override format if explicitly specified
         if 'format' in yt_dlp_opts and yt_dlp_opts['format']:
             ydl_opts['format'] = yt_dlp_opts['format']
 
@@ -409,6 +433,28 @@ class YouTubeService:
 
             def download_sync():
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    # First, check if video has any downloadable formats
+                    info = ydl.extract_info(url, download=False)
+
+                    # Check if there are any actual video formats available
+                    formats = info.get('formats', [])
+                    video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('vcodec') != 'images']
+
+                    if not video_formats:
+                        error_msg = "No video formats available for this video. "
+                        if info.get('availability') == 'needs_auth':
+                            error_msg += "This video requires authentication (login). Please make sure you're logged into YouTube in your browser."
+                        elif info.get('live_status') == 'is_upcoming':
+                            error_msg += "This is an upcoming live stream that hasn't started yet."
+                        elif info.get('live_status') == 'was_live':
+                            error_msg += "This was a live stream. It may not be available for download."
+                        elif info.get('availability') in ['premium_only', 'subscriber_only']:
+                            error_msg += "This is a premium or members-only video."
+                        else:
+                            error_msg += "The video may be region-locked, private, or deleted."
+                        raise VideoNotFoundError(error_msg)
+
+                    # Proceed with download
                     ydl.download([url])
 
                 # Find the actual downloaded file (yt-dlp adds extension automatically)
@@ -418,6 +464,13 @@ class YouTubeService:
                     if Path(candidate).exists():
                         return candidate
 
+                # Check if file exists without extension
+                if Path(output_template).exists():
+                    # File downloaded without extension, rename it to .mp4
+                    target_path = output_template + '.mp4'
+                    Path(output_template).rename(target_path)
+                    return target_path
+
                 # Fallback to original output_file if nothing found
                 return output_file
 
@@ -425,7 +478,20 @@ class YouTubeService:
             result = await loop.run_in_executor(None, download_sync)
             return result
 
+        except VideoNotFoundError:
+            # Re-raise our custom errors with clear messages
+            raise
         except yt_dlp.DownloadError as e:
-            raise VideoNotFoundError(f"Failed to download video: {e}") from e
+            error_str = str(e).lower()
+            if 'requested format is not available' in error_str:
+                raise VideoNotFoundError(
+                    "The video format is not available. This may be due to: "
+                    "1) Regional restrictions, 2) Login required, or 3) Video is private/deleted. "
+                    "Try logging into YouTube in your browser (Chrome) first."
+                ) from e
+            elif 'video unavailable' in error_str:
+                raise VideoNotFoundError("Video is unavailable or has been removed.") from e
+            else:
+                raise VideoNotFoundError(f"Failed to download video: {e}") from e
         except Exception as e:
             raise VideoNotFoundError(f"Unexpected error during download: {e}") from e

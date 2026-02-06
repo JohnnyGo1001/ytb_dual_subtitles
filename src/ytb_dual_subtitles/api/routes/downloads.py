@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from ytb_dual_subtitles.core.download_manager import DownloadManager
+from ytb_dual_subtitles.core.settings import get_settings
 from ytb_dual_subtitles.models import (
     ApiResponse,
     DictResponse,
@@ -63,9 +64,18 @@ def get_download_manager() -> DownloadManager:
 
     # Create singleton instance if it doesn't exist
     if _download_manager_instance is None:
-        youtube_service = YouTubeService()
+        settings = get_settings()
+        youtube_service = YouTubeService(
+            browser_for_cookies=settings.browser_name,
+            browser_profile=settings.browser_profile
+        )
         storage_service = StorageService()
-        _download_manager_instance = DownloadManager(youtube_service, storage_service)
+        _download_manager_instance = DownloadManager(
+            youtube_service=youtube_service,
+            storage_service=storage_service,
+            max_concurrent=settings.max_concurrent_downloads,
+            max_retries=settings.download_max_retries
+        )
 
     return _download_manager_instance
 
@@ -85,7 +95,11 @@ async def create_download_task(
         Unified API response with created task information
     """
     # Validate YouTube URL
-    youtube_service = YouTubeService()
+    settings = get_settings()
+    youtube_service = YouTubeService(
+        browser_for_cookies=settings.browser_name,
+        browser_profile=settings.browser_profile
+    )
     if not youtube_service.validate_youtube_url(request.url):
         return ApiResponse.error_response(
             error_code=ErrorCodes.INVALID_URL,

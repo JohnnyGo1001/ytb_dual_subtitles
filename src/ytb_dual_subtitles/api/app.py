@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from ytb_dual_subtitles.api.routes import downloads, files, player, categories
 from ytb_dual_subtitles.core.database import init_database
+from ytb_dual_subtitles.core.settings import get_settings
 from ytb_dual_subtitles.models import ApiResponse, ErrorCodes
 
 
@@ -27,6 +28,9 @@ async def lifespan(app: FastAPI):
     # Shutdown: Cleanup if needed
     print("🔄 应用关闭")
 
+# Get settings
+settings = get_settings()
+
 # Create FastAPI application instance
 app = FastAPI(
     title="YouTube Dual Subtitles System",
@@ -36,13 +40,17 @@ app = FastAPI(
 )
 
 # Configure CORS for frontend access
+# Build allowed origins list from settings
+allowed_origins = [
+    settings.frontend_url,  # Configured frontend URL
+    "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server default port
+    "http://localhost:3000", "http://127.0.0.1:3000",  # Alternative frontend port
+    "http://localhost:3001", "http://127.0.0.1:3001",  # Alternative frontend port
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server default port
-        "http://localhost:3000", "http://127.0.0.1:3000",  # Alternative frontend port
-        "http://localhost:3001", "http://127.0.0.1:3001",  # Alternative frontend port
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

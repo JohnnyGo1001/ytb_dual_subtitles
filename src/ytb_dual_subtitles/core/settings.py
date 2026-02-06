@@ -48,10 +48,15 @@ class Settings(BaseSettings):
         description="Directory for application data"
     )
 
-    # Google Translate API configuration
-    google_translate_api_key: str | None = Field(
-        default=None,
-        description="Google Translate API key"
+    # Browser cookie configuration
+    browser_name: str = Field(
+        default="chrome",
+        description="Browser name for cookie extraction (chrome, firefox, safari, edge)"
+    )
+
+    browser_profile: str | None = Field(
+        default="Default",
+        description="Browser profile name for cookie extraction (e.g., 'Default', 'Profile 1')"
     )
 
     # Application configuration
@@ -79,6 +84,44 @@ class Settings(BaseSettings):
         description="Download timeout in seconds"
     )
 
+    download_max_retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Maximum number of retry attempts for failed downloads"
+    )
+
+    # yt-dlp configuration
+    yt_dlp_format: str | None = Field(
+        default=None,
+        description="Custom video format string for yt-dlp. If None, uses smart default format selection."
+    )
+
+    yt_dlp_write_subtitles: bool = Field(
+        default=True,
+        description="Whether to download subtitles"
+    )
+
+    yt_dlp_write_auto_subtitles: bool = Field(
+        default=True,
+        description="Whether to download auto-generated subtitles"
+    )
+
+    yt_dlp_subtitle_languages: str = Field(
+        default="en,zh-CN,zh-Hans,zh-Hant,zh-TW,ja,ko,es,fr,de",
+        description="Comma-separated list of subtitle languages to download"
+    )
+
+    yt_dlp_subtitle_format: str = Field(
+        default="vtt",
+        description="Subtitle format (vtt, srt, ass, etc.)"
+    )
+
+    yt_dlp_merge_output_format: str = Field(
+        default="mp4",
+        description="Container format for merged video+audio (mp4, mkv, webm, etc.)"
+    )
+
     # Web server configuration
     host: str = Field(
         default="127.0.0.1",
@@ -95,12 +138,6 @@ class Settings(BaseSettings):
     frontend_url: str = Field(
         default="http://localhost:3000",
         description="Frontend URL for CORS configuration"
-    )
-
-    # Security configuration
-    secret_key: str = Field(
-        default="dev-secret-key-change-in-production",
-        description="Secret key for session management"
     )
 
     def __init__(self, **kwargs) -> None:
@@ -130,22 +167,33 @@ class Settings(BaseSettings):
         return self.data_path / "ytb.db"
 
     def get_yt_dlp_opts(self) -> dict[str, any]:
-        """Get yt-dlp configuration options."""
-        return {
-            # Don't specify format - let yt-dlp choose the best video+audio and merge
-            # This is the recommended approach according to yt-dlp documentation
+        """Get yt-dlp configuration options from settings.
+
+        Returns:
+            Dictionary of yt-dlp options configured via environment variables
+        """
+        # Parse subtitle languages from comma-separated string
+        subtitle_langs = [lang.strip() for lang in self.yt_dlp_subtitle_languages.split(',') if lang.strip()]
+
+        opts = {
             'outtmpl': str(self.download_path / '%(title)s.%(ext)s'),
-            'writesubtitles': True,
-            'writeautomaticsub': True,
-            'subtitleslangs': ['en', 'zh-Hans', 'zh-Hant', 'zh-CN', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'de'],
-            'subtitlesformat': 'vtt',  # Use VTT format for subtitles
+            'writesubtitles': self.yt_dlp_write_subtitles,
+            'writeautomaticsub': self.yt_dlp_write_auto_subtitles,
+            'subtitleslangs': subtitle_langs,
+            'subtitlesformat': self.yt_dlp_subtitle_format,
             'ignoreerrors': True,
             'no_warnings': not self.debug,
             'extractaudio': False,
             'audioformat': 'mp3',
             'embed_subs': False,  # We handle subtitles separately
-            'merge_output_format': 'mp4',  # Ensure merged output is MP4
+            'merge_output_format': self.yt_dlp_merge_output_format,
         }
+
+        # Only add format if explicitly specified
+        if self.yt_dlp_format:
+            opts['format'] = self.yt_dlp_format
+
+        return opts
 
 
 # Global settings instance

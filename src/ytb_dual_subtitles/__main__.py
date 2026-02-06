@@ -12,14 +12,18 @@ def main() -> None:
     配置并启动 FastAPI 应用服务器。
     """
     import uvicorn
+    from ytb_dual_subtitles.core.settings import get_settings
+
+    # 获取配置
+    settings = get_settings()
 
     # 启动 FastAPI 应用
     uvicorn.run(
         "ytb_dual_subtitles.api.app:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=True,
-        log_level="info",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug,
+        log_level=settings.log_level.lower(),
         access_log=True,
     )
 

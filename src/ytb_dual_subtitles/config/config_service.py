@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Any, Dict, Optional
 
 from ytb_dual_subtitles.config.config_manager import ConfigManager
+from ytb_dual_subtitles.core.settings import get_settings
 from ytb_dual_subtitles.exceptions.config_errors import ConfigError
 
 
@@ -116,20 +117,20 @@ class ConfigService:
                 'format': 'mp4'
             },
             'subtitles': {
-                'default_languages': ['en', 'zh-CN'],
+                'default_languages': get_settings().yt_dlp_subtitle_languages.split(','),
                 'sync_tolerance': 0.1,
                 'cache_enabled': True,
                 'cache_ttl_days': 7
             },
             'server': {
-                'host': '127.0.0.1',
-                'port': 8000,
-                'debug': False
+                'host': get_settings().host,
+                'port': get_settings().port,
+                'debug': get_settings().debug
             },
             'logging': {
-                'level': 'INFO',
+                'level': get_settings().log_level,
                 'file_enabled': True,
-                'file_path': '~/ytb/logs/app.log'
+                'file_path': str(get_settings().data_path / 'logs' / 'app.log')
             }
         }
 

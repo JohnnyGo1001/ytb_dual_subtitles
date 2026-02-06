@@ -300,9 +300,11 @@ class DownloadManager:
         """Execute the download for a task with retry mechanism.
 
         Complete workflow:
-        1. Download video (0-60% progress)
-        2. Process and import subtitles (60-100% progress)
-        Note: Dual subtitle burning is disabled
+        1. Download video (0-50% progress)
+        2. Download and import subtitles (50-100% progress)
+
+        Both steps must succeed for the task to be marked as complete.
+        Retries up to max_retries times on failure.
 
         Args:
             task: Download task to execute
@@ -318,69 +320,138 @@ class DownloadManager:
                     # Update task with title immediately
                     self._task_dao.update_task(task.task_id, {
                         'title': title,
-                        'status_message': f'正在下载: {title}',
+                        'status_message': f'正在准备下载: {title}',
                         'progress': 0
                     })
                 except Exception as e:
-                    print(f"Failed to get video info, continuing with download: {e}")
-                    title = "未知标题"
+                    print(f"Failed to get video info: {e}")
+                    task.set_error(f"Failed to get video info: {e}")
+                    await self._complete_task(task, success=False)
+                    return
 
-                while True:
+                # Retry loop
+                while task.retry_count <= self.max_retries:
+                    video_downloaded = False
+                    subtitles_imported = False
+                    file_path = None
+
                     try:
-                        # Step 1: Download video (0-60% progress)
+                        # Step 1: Download video (0-50% progress)
                         filename = self._youtube_service.generate_filename_from_url(task.url)
                         file_path = self._storage_service.generate_file_path_from_url(filename)
 
                         self._task_dao.update_task(task.task_id, {
-                            'status_message': f'下载视频中: {title}',
+                            'status_message': f'下载视频中: {title} (尝试 {task.retry_count + 1}/{self.max_retries + 1})',
                             'progress': 10
                         })
 
-                        await self._youtube_service.download_video(task.url, task.task_id, str(file_path))
+                        downloaded_path = await self._youtube_service.download_video(
+                            task.url, task.task_id, str(file_path)
+                        )
 
-                        # Video download complete
+                        # Verify video file exists
+                        from pathlib import Path
+                        if not Path(downloaded_path).exists():
+                            raise Exception(f"Video file not found after download: {downloaded_path}")
+
+                        video_downloaded = True
+                        print(f"✓ Video downloaded successfully: {downloaded_path}")
+
+                        # Update progress
                         self._task_dao.update_task(task.task_id, {
-                            'status_message': f'视频下载完成，处理字幕中...',
-                            'progress': 60
+                            'status_message': f'视频下载完成，导入字幕中...',
+                            'progress': 50
                         })
 
-                        # Step 2: Process subtitles (already handled in _complete_task)
-                        # This will be done in _complete_task -> _create_video_record -> _import_subtitles
+                        # Step 2: Create video record and import subtitles (50-100% progress)
+                        video_db_id = await self._create_video_record(task)
 
-                        # Complete task with subtitle processing
-                        await self._complete_task(task, success=True)
-                        return  # Success, exit retry loop
+                        if video_db_id:
+                            # Verify subtitles were imported
+                            from ytb_dual_subtitles.core.database import get_db_session
+                            from ytb_dual_subtitles.models.video import Subtitle
+                            from sqlalchemy import select, func
+
+                            async with get_db_session() as session:
+                                subtitle_count_query = select(func.count()).select_from(Subtitle).where(
+                                    Subtitle.video_id == video_db_id
+                                )
+                                result = await session.execute(subtitle_count_query)
+                                subtitle_count = result.scalar()
+
+                                if subtitle_count > 0:
+                                    subtitles_imported = True
+                                    print(f"✓ Subtitles imported successfully: {subtitle_count} subtitle tracks")
+                                else:
+                                    # No subtitles found - this might be acceptable for some videos
+                                    print(f"⚠ Warning: No subtitles found/imported for video {video_db_id}")
+                                    # We'll consider this a success but log the warning
+                                    subtitles_imported = True
+                        else:
+                            raise Exception("Failed to create video record in database")
+
+                        # Both video and subtitles successful
+                        if video_downloaded and subtitles_imported:
+                            self._task_dao.update_task(task.task_id, {
+                                'status_message': f'下载完成: {title}',
+                                'progress': 100
+                            })
+                            await self._complete_task(task, success=True)
+                            return  # Success, exit retry loop
 
                     except asyncio.CancelledError:
                         # Task was cancelled, don't mark as error
+                        print(f"Task {task.task_id} was cancelled")
                         return
 
                     except Exception as e:
+                        error_msg = str(e)
+                        print(f"Download attempt {task.retry_count + 1} failed: {error_msg}")
+
                         # Check if this is a non-retryable error
                         if self._is_non_retryable_error(e):
-                            task.set_error(str(e))
+                            print(f"Non-retryable error encountered: {error_msg}")
+                            task.set_error(error_msg)
                             await self._complete_task(task, success=False)
                             return
 
                         # If we've exceeded max retries, mark as failed
                         if task.retry_count >= self.max_retries:
-                            task.set_error(str(e))
+                            print(f"Max retries ({self.max_retries}) reached, marking task as failed")
+                            task.set_error(f"Failed after {self.max_retries + 1} attempts: {error_msg}")
                             await self._complete_task(task, success=False)
                             return
 
-                        # Increment retry count and update database
+                        # Increment retry count
                         task.retry_count += 1
+
+                        # Determine what failed for better error message
+                        failure_stage = "视频下载" if not video_downloaded else "字幕导入"
+
                         self._task_dao.update_task(task.task_id, {
                             'retry_count': task.retry_count,
-                            'status_message': f'Retrying... (attempt {task.retry_count + 1})'
+                            'status_message': f'{failure_stage}失败，{2 ** task.retry_count}秒后重试... (尝试 {task.retry_count + 1}/{self.max_retries + 1})',
+                            'error_message': error_msg
                         })
 
                         # Wait before retry (exponential backoff)
-                        wait_time = 2 ** (task.retry_count - 1)  # 1, 2, 4, 8 seconds
+                        wait_time = 2 ** task.retry_count  # 2, 4, 8 seconds
+                        print(f"Waiting {wait_time} seconds before retry...")
                         await asyncio.sleep(wait_time)
+
+                        # Clean up partial downloads if video failed
+                        if not video_downloaded and file_path:
+                            try:
+                                from pathlib import Path
+                                if Path(file_path).exists():
+                                    Path(file_path).unlink()
+                                    print(f"Cleaned up partial download: {file_path}")
+                            except Exception as cleanup_error:
+                                print(f"Failed to cleanup partial download: {cleanup_error}")
 
         except asyncio.CancelledError:
             # Task was cancelled, this is expected
+            print(f"Task {task.task_id} cancelled")
             pass
 
         finally:
@@ -411,26 +482,10 @@ class DownloadManager:
         """
         # Update task status
         if success and task.status != DownloadTaskStatus.ERROR:
-            # Video download successful, now process subtitles
-            # Update progress to 70% - subtitle import in progress
-            self._task_dao.update_task(task.task_id, {
-                'status_message': '导入字幕中...',
-                'progress': 70
-            })
-
-            # Create video record and import subtitles
-            video_id = await self._create_video_record(task)
-
-            if video_id:
-                # Dual subtitle burning is disabled
-                # Just mark as completed
-                pass
-
             task.status = DownloadTaskStatus.COMPLETED
             task.progress = 100
-
         elif task.status != DownloadTaskStatus.ERROR:
-            task.status = DownloadTaskStatus.FAILED
+            task.status = DownloadTaskStatus.ERROR
 
         task.completed_at = datetime.now()
 
@@ -440,7 +495,7 @@ class DownloadManager:
             'progress': task.progress,
             'completed_at': task.completed_at.isoformat(),
             'error_message': task.error_message,
-            'status_message': '下载完成' if success else task.error_message
+            'status_message': '下载完成' if success else (task.error_message or '下载失败')
         }
 
         self._task_dao.update_task(task.task_id, updates)
@@ -448,6 +503,12 @@ class DownloadManager:
         # Clean up running task reference
         if task.task_id in self._running_tasks:
             del self._running_tasks[task.task_id]
+
+        # Log final status
+        if success:
+            print(f"✓ Task {task.task_id} completed successfully")
+        else:
+            print(f"✗ Task {task.task_id} failed: {task.error_message}")
 
     async def _create_video_record(self, task: DownloadTask) -> int | None:
         """Create a video record in the videos table after successful download.
@@ -457,6 +518,9 @@ class DownloadManager:
 
         Returns:
             Video ID if successful, None otherwise
+
+        Raises:
+            Exception: If critical error occurs during video record creation
         """
         try:
             # Extract video ID from URL
@@ -468,6 +532,16 @@ class DownloadManager:
             # Get downloaded file path
             filename = self._youtube_service.generate_filename_from_url(task.url)
             file_path = self._storage_service.generate_file_path_from_url(filename)
+
+            # Verify file exists before creating database record
+            from pathlib import Path
+            if not Path(file_path).exists():
+                # Try with .mp4 extension
+                file_path_with_ext = Path(str(file_path).replace('.mp4', '') + '.mp4')
+                if file_path_with_ext.exists():
+                    file_path = file_path_with_ext
+                else:
+                    raise Exception(f"Downloaded video file not found: {file_path}")
 
             # Import SQLAlchemy components
             from ytb_dual_subtitles.core.database import get_db_session
@@ -489,7 +563,17 @@ class DownloadManager:
                 )
                 existing = existing_video.scalar_one_or_none()
                 if existing:
-                    print(f"Video '{video_title}' already exists in database (ID: {existing.youtube_id}), skipping creation")
+                    print(f"Video '{video_title}' already exists in database (ID: {existing.id}), updating and re-importing subtitles")
+
+                    # Update file path if different
+                    if existing.file_path != str(file_path):
+                        existing.file_path = str(file_path)
+                        await session.commit()
+
+                    # Re-import subtitles
+                    subtitle_count = await self._import_subtitles(existing, str(file_path), session)
+                    print(f"Re-imported {subtitle_count} subtitle track(s) for existing video")
+
                     # Update download task with title
                     self._task_dao.update_task(task.task_id, {
                         'title': video_title
@@ -497,6 +581,7 @@ class DownloadManager:
                     return existing.id
 
                 # Create new video record
+                print(f"Creating new video record: {video_title}")
                 video = Video(
                     youtube_id=video_id,
                     title=video_title,
@@ -504,15 +589,20 @@ class DownloadManager:
                     duration=video_info.get("duration", 0),
                     file_path=str(file_path),
                     status=VideoStatus.COMPLETED,
+                    channel_name=video_info.get("uploader", "Unknown"),
                 )
 
                 session.add(video)
                 await session.commit()
                 await session.refresh(video)  # Refresh to get the ID
-                print(f"Created video record for: {video_title} (ID: {video.id})")
+                print(f"✓ Created video record (ID: {video.id})")
 
                 # Process and import subtitles
-                await self._import_subtitles(video, file_path, session)
+                print(f"Importing subtitles for video ID: {video.id}")
+                subtitle_count = await self._import_subtitles(video, str(file_path), session)
+
+                if subtitle_count == 0:
+                    print(f"⚠ Warning: No subtitles imported for video {video.id}")
 
                 # Update download task with title
                 self._task_dao.update_task(task.task_id, {
@@ -522,19 +612,28 @@ class DownloadManager:
                 return video.id
 
         except Exception as e:
-            print(f"Failed to create video record: {e}")
+            error_msg = f"Failed to create video record: {e}"
+            print(f"✗ {error_msg}")
             import traceback
             traceback.print_exc()
-            return None
+            raise Exception(error_msg) from e
 
-    async def _import_subtitles(self, video: Any, video_path: str, session: Any) -> None:
+    async def _import_subtitles(self, video: Any, video_path: str, session: Any) -> int:
         """Import subtitle files downloaded by yt-dlp.
 
         Args:
             video: Video record from database
             video_path: Path to the video file
             session: Database session
+
+        Returns:
+            Number of subtitle tracks successfully imported
+
+        Raises:
+            Exception: If subtitle import fails critically
         """
+        imported_count = 0
+
         try:
             from pathlib import Path
             from ytb_dual_subtitles.models.video import Subtitle, SubtitleSegment, SubtitleSourceType
@@ -547,14 +646,28 @@ class DownloadManager:
             subtitle_files = list(base_path.glob(f"{base_name}.*.vtt"))
 
             if not subtitle_files:
-                print(f"No subtitle files found for: {base_name}")
-                return
+                print(f"⚠ No subtitle files found for: {base_name}")
+                print(f"   Searched pattern: {base_path}/{base_name}.*.vtt")
+                # Try alternative pattern without extension
+                base_name_no_ext = video_path_obj.stem.replace('.mp4', '').replace('.webm', '').replace('.mkv', '')
+                subtitle_files = list(base_path.glob(f"{base_name_no_ext}.*.vtt"))
+                if subtitle_files:
+                    print(f"   Found using alternative pattern: {len(subtitle_files)} files")
+
+            if not subtitle_files:
+                print(f"⚠ Warning: No subtitle files found at all. Video may not have subtitles available.")
+                return 0
+
+            print(f"Found {len(subtitle_files)} subtitle file(s) to import")
 
             for subtitle_file in subtitle_files:
                 try:
+                    print(f"  Processing subtitle file: {subtitle_file.name}")
+
                     # Extract language from filename (e.g., "video.en.vtt" -> "en")
                     parts = subtitle_file.stem.split('.')
                     if len(parts) < 2:
+                        print(f"    ⚠ Skipping file with invalid name format: {subtitle_file.name}")
                         continue
                     language = parts[-1]
 
@@ -577,7 +690,21 @@ class DownloadManager:
                     segments = await self._parse_vtt_file(subtitle_file)
 
                     if not segments:
-                        print(f"No segments found in: {subtitle_file}")
+                        print(f"    ⚠ No valid segments found in: {subtitle_file.name}")
+                        continue
+
+                    print(f"    Parsed {len(segments)} segments")
+
+                    # Check if subtitle already exists for this language
+                    from sqlalchemy import select
+                    existing_subtitle = await session.execute(
+                        select(Subtitle).where(
+                            Subtitle.video_id == video.id,
+                            Subtitle.language == language
+                        )
+                    )
+                    if existing_subtitle.scalar_one_or_none():
+                        print(f"    ⚠ Subtitle for language {language} already exists, skipping")
                         continue
 
                     # Create subtitle record
@@ -590,27 +717,44 @@ class DownloadManager:
                     session.add(subtitle)
                     await session.flush()  # Get subtitle ID
 
-                    # Create subtitle segments
-                    for seq, seg in enumerate(segments, start=1):
-                        segment = SubtitleSegment(
-                            subtitle_id=subtitle.id,
-                            sequence=seq,
-                            start_time=seg['start'],
-                            end_time=seg['end'],
-                            text=seg['text']
-                        )
-                        session.add(segment)
+                    # Create subtitle segments in batches for better performance
+                    batch_size = 100
+                    for i in range(0, len(segments), batch_size):
+                        batch = segments[i:i + batch_size]
+                        for seq, seg in enumerate(batch, start=i + 1):
+                            segment = SubtitleSegment(
+                                subtitle_id=subtitle.id,
+                                sequence=seq,
+                                start_time=seg['start'],
+                                end_time=seg['end'],
+                                text=seg['text']
+                            )
+                            session.add(segment)
 
                     await session.commit()
-                    print(f"Imported {len(segments)} subtitle segments for language: {language}")
+                    imported_count += 1
+                    print(f"    ✓ Imported {len(segments)} segments for language: {language_name} ({language})")
 
                 except Exception as e:
-                    print(f"Failed to import subtitle {subtitle_file}: {e}")
+                    print(f"    ✗ Failed to import subtitle {subtitle_file.name}: {e}")
+                    import traceback
+                    traceback.print_exc()
                     await session.rollback()
+                    # Continue with other subtitle files instead of failing completely
                     continue
 
+            if imported_count > 0:
+                print(f"✓ Successfully imported {imported_count} subtitle track(s)")
+            else:
+                print(f"⚠ No subtitles were successfully imported")
+
+            return imported_count
+
         except Exception as e:
-            print(f"Failed to import subtitles: {e}")
+            print(f"✗ Critical error during subtitle import: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     async def _parse_vtt_file(self, vtt_path: Path) -> list[dict[str, Any]]:
         """Parse WebVTT subtitle file.
