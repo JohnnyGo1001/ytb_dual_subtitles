@@ -263,3 +263,4 @@ __marimo__/
 *.bak
 *.backup
 *~
+.env
